@@ -119,24 +119,37 @@ describe('PopupAuth', () => {
 
       const loginPromise = popupAuth.login({ timeout: 10000 });
 
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      loginPromise.catch((e) => {
+        caughtError = e;
+      });
+
       // Simulate popup close
       mockPopup.closed = true;
 
       // Advance timers for the interval check
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(loginPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'popup_closed',
         message: expect.stringContaining('closed'),
       });
-
-      vi.useRealTimers();
     });
 
     it('should reject messages from wrong origin', async () => {
       vi.useFakeTimers();
 
       const loginPromise = popupAuth.login({ timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      loginPromise.catch((e) => {
+        caughtError = e;
+      });
 
       // Wait for handler registration
       await vi.advanceTimersByTimeAsync(10);
@@ -157,7 +170,10 @@ describe('PopupAuth', () => {
       // Should timeout because wrong origin was ignored
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(loginPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -166,6 +182,12 @@ describe('PopupAuth', () => {
       vi.useFakeTimers();
 
       const loginPromise = popupAuth.login({ timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      loginPromise.catch((e) => {
+        caughtError = e;
+      });
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -184,7 +206,10 @@ describe('PopupAuth', () => {
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(loginPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -193,6 +218,12 @@ describe('PopupAuth', () => {
       vi.useFakeTimers();
 
       const loginPromise = popupAuth.login({ timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      loginPromise.catch((e) => {
+        caughtError = e;
+      });
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -211,7 +242,10 @@ describe('PopupAuth', () => {
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(loginPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -320,9 +354,18 @@ describe('PopupAuth', () => {
 
       const loginPromise = popupAuth.login({ timeout: 100 });
 
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      loginPromise.catch((e) => {
+        caughtError = e;
+      });
+
       await vi.advanceTimersByTimeAsync(200);
 
-      await expect(loginPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
 

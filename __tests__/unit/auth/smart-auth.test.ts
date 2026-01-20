@@ -237,12 +237,21 @@ describe('SmartAuth', () => {
 
       const handoffPromise = smartAuth.executeHandoff(handoff, { timeout: 10000 });
 
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      handoffPromise.catch((e) => {
+        caughtError = e;
+      });
+
       // Simulate popup close
       mockPopup.closed = true;
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(handoffPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'popup_closed',
       });
     });
@@ -257,6 +266,12 @@ describe('SmartAuth', () => {
       };
 
       const handoffPromise = smartAuth.executeHandoff(handoff, { timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      handoffPromise.catch((e) => {
+        caughtError = e;
+      });
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -275,7 +290,10 @@ describe('SmartAuth', () => {
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(handoffPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -290,6 +308,12 @@ describe('SmartAuth', () => {
       };
 
       const handoffPromise = smartAuth.executeHandoff(handoff, { timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      handoffPromise.catch((e) => {
+        caughtError = e;
+      });
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -308,7 +332,10 @@ describe('SmartAuth', () => {
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(handoffPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -323,6 +350,12 @@ describe('SmartAuth', () => {
       };
 
       const handoffPromise = smartAuth.executeHandoff(handoff, { timeout: 500 });
+
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      handoffPromise.catch((e) => {
+        caughtError = e;
+      });
 
       await vi.advanceTimersByTimeAsync(10);
 
@@ -341,7 +374,10 @@ describe('SmartAuth', () => {
 
       await vi.advanceTimersByTimeAsync(600);
 
-      await expect(handoffPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
     });
@@ -477,9 +513,18 @@ describe('SmartAuth', () => {
 
       const handoffPromise = smartAuth.executeHandoff(handoff, { timeout: 100 });
 
+      // Attach catch handler immediately to prevent unhandled rejection
+      let caughtError: unknown;
+      handoffPromise.catch((e) => {
+        caughtError = e;
+      });
+
       await vi.advanceTimersByTimeAsync(200);
 
-      await expect(handoffPromise).rejects.toMatchObject({
+      // Clear remaining timers
+      vi.clearAllTimers();
+
+      expect(caughtError).toMatchObject({
         code: 'timeout_error',
       });
 
