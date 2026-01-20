@@ -9,7 +9,7 @@ Browser SDK for [Authrim](https://github.com/sgrastar/authrim) - a modern, devel
 
 `@authrim/web` is a browser-specific authentication SDK that provides:
 
-- **BetterAuth-style API** with unified `{ data, error }` response pattern
+- **Unified `{ data, error }` response pattern** - Type-safe error handling with discriminated unions
 - **Direct Auth** - Passkey (WebAuthn), Email Code, Social Login
 - **OAuth/OIDC** - Popup, Silent Auth, Redirect flows
 - **Session Management** - check_session_iframe, Session Monitor, Front-Channel Logout
@@ -33,8 +33,10 @@ yarn add @authrim/web
 
 ### CDN (UMD)
 
+The UMD build includes `@authrim/core` bundled, so no additional scripts are needed.
+
 ```html
-<!-- Latest version -->
+<!-- Latest version (includes @authrim/core) -->
 <script src="https://unpkg.com/@authrim/web/dist/authrim-web.umd.global.js"></script>
 
 <!-- Or via jsDelivr -->
