@@ -17,7 +17,9 @@
   "unpkg": "./dist/authrim-web.umd.global.js",
   "jsdelivr": "./dist/authrim-web.umd.global.js",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -29,7 +31,8 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
-    "clean": "rm -rf dist coverage"
+    "clean": "rm -rf dist coverage",
+    "prepublishOnly": "pnpm run clean && pnpm run build && pnpm run typecheck && pnpm run test"
   },
   "keywords": [
     "auth",
@@ -40,18 +43,23 @@
     "authrim",
     "browser",
     "sso",
-    "itp"
+    "itp",
+    "passkey",
+    "webauthn",
+    "social-login",
+    "session-management",
+    "device-flow",
+    "silent-auth"
   ],
-  "author": "Authrim",
+  "author": "Authrim <info@authrim.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/authrim/js-core.git",
-    "directory": "packages/web"
+    "url": "git+https://github.com/authrim/js-web.git"
   },
-  "homepage": "https://github.com/authrim/js-core#readme",
+  "homepage": "https://github.com/authrim/js-web#readme",
   "bugs": {
-    "url": "https://github.com/authrim/js-core/issues"
+    "url": "https://github.com/authrim/js-web/issues"
   },
   "dependencies": {
     "@authrim/core": "^0.1.3"
