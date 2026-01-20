@@ -1,0 +1,75 @@
+{
+  "name": "@authrim/web",
+  "version": "0.1.0",
+  "description": "Browser implementation for Authrim SDK",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./umd": "./dist/authrim-web.umd.global.js"
+  },
+  "unpkg": "./dist/authrim-web.umd.global.js",
+  "jsdelivr": "./dist/authrim-web.umd.global.js",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
+    "clean": "rm -rf dist coverage"
+  },
+  "keywords": [
+    "auth",
+    "authentication",
+    "oidc",
+    "oauth2",
+    "pkce",
+    "authrim",
+    "browser",
+    "sso",
+    "itp"
+  ],
+  "author": "Authrim",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/authrim/js-core.git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/authrim/js-core#readme",
+  "bugs": {
+    "url": "https://github.com/authrim/js-core/issues"
+  },
+  "dependencies": {
+    "@authrim/core": "^0.1.3"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^27.0.0",
+    "@types/node": "^20.11.0",
+    "eslint": "^8.56.0",
+    "jsdom": "^27.4.0",
+    "prettier": "^3.2.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "@authrim/core": ">=0.1.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

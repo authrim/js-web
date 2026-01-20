@@ -1,0 +1,2 @@
+overrides:
+  '@authrim/core': link:../js-core/packages/core
