@@ -25,3 +25,9 @@ export {
   type FrontChannelLogoutHandlerOptions,
   type FrontChannelLogoutHandleResult,
 } from './front-channel-logout-handler.js';
+export {
+  TabSyncManager,
+  type TabSyncConfig,
+  type TabSyncMessage,
+  type TabSyncMessageType,
+} from './tab-sync.js';

@@ -33,3 +33,19 @@ export {
   type DeviceFlowUIEventHandler,
   type DeviceFlowUIEventType,
 } from './device-flow-ui.js';
+export {
+  detectCallback,
+  isOAuthCallback,
+  isOAuthError,
+  getCallbackParams,
+  cleanCallbackUrl,
+  replaceUrlWithCleanVersion,
+  // Redirect loop prevention
+  trackRedirect,
+  isRedirectLoop,
+  clearRedirectTracking,
+  getRedirectLoopInfo,
+  type CallbackDetectionInput,
+  type CallbackDetectionResult,
+  type RedirectLoopConfig,
+} from './callback-detector.js';

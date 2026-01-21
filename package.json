@@ -1,6 +1,6 @@
 {
   "name": "@authrim/web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Browser implementation for Authrim SDK",
   "type": "module",
   "main": "./dist/index.cjs",

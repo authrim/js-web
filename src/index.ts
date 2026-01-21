@@ -136,3 +136,80 @@ export {
   type DeviceFlowUIEventHandler,
   type DeviceFlowUIEventType,
 } from './auth/device-flow-ui.js';
+
+// =============================================================================
+// Tab Sync (cross-tab session synchronization)
+// =============================================================================
+
+export {
+  TabSyncManager,
+  type TabSyncConfig,
+  type TabSyncMessage,
+  type TabSyncMessageType,
+} from './session/tab-sync.js';
+
+// =============================================================================
+// State Machine (reactive state management)
+// =============================================================================
+
+export {
+  AuthStateMachine,
+  type AuthStateMachineConfig,
+  type StateChangeListener,
+} from './state/auth-state-machine.js';
+
+// =============================================================================
+// Callback Detection
+// =============================================================================
+
+export {
+  detectCallback,
+  isOAuthCallback,
+  isOAuthError,
+  getCallbackParams,
+  cleanCallbackUrl,
+  replaceUrlWithCleanVersion,
+  // Redirect loop prevention
+  trackRedirect,
+  isRedirectLoop,
+  clearRedirectTracking,
+  getRedirectLoopInfo,
+  type CallbackDetectionInput,
+  type CallbackDetectionResult,
+  type RedirectLoopConfig,
+} from './auth/callback-detector.js';
+
+// =============================================================================
+// Storage & Environment Detection
+// =============================================================================
+
+export {
+  detectStorageAvailability,
+  detectPrivateMode,
+  emitStorageFallbackWarning,
+  emitPrivateModeWarning,
+  type StorageAvailability,
+  type PrivateModeDetection,
+} from './utils/storage-detection.js';
+
+export {
+  detectITPEnvironment,
+  emitITPWarningIfNeeded,
+  checkITPAndWarn,
+  type ITPDetectionResult,
+} from './utils/itp-detection.js';
+
+// =============================================================================
+// Debug Utilities
+// =============================================================================
+
+export {
+  createDebugDump,
+  formatDump,
+  type AuthDebugDump,
+  type TokenStateSummary,
+  type StorageStateSummary,
+  type EventsSummary,
+  type EnvironmentSummary,
+  type CreateDumpOptions,
+} from './debug/dump.js';

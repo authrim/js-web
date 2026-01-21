@@ -30,6 +30,10 @@ export interface PopupAuthOptions
   redirectUri?: string;
   /** Timeout in ms (default: 300000 = 5 min) */
   timeout?: number;
+  /** Fallback to redirect flow if popup is blocked */
+  fallbackToRedirect?: boolean;
+  /** Redirect URI for fallback (defaults to current URL) */
+  fallbackRedirectUri?: string;
 }
 
 /** P1: attemptState のエントリ型（TTL 対応） */
@@ -131,7 +135,38 @@ export class PopupAuth {
         `width=${width},height=${height},left=${left},top=${top},popup=yes`
       );
 
-      if (!popup) {
+      if (!popup || popup.closed) {
+        // Emit popup blocked event
+        this.client.eventEmitter?.emit('auth:popup_blocked', {
+          url,
+          timestamp: Date.now(),
+          source: 'web',
+        });
+
+        // Handle fallback to redirect
+        if (options?.fallbackToRedirect) {
+          // Emit fallback event
+          this.client.eventEmitter?.emit('auth:fallback', {
+            from: 'popup',
+            to: 'redirect',
+            reason: 'popup_blocked',
+            timestamp: Date.now(),
+            source: 'web',
+          });
+
+          // Redirect to authorization URL - use IIFE for async handling
+          const fallbackUri = options.fallbackRedirectUri ?? window.location.href;
+          void (async () => {
+            const { url: redirectUrl } = await this.client.buildAuthorizationUrl({
+              ...options,
+              redirectUri: fallbackUri,
+            });
+            window.location.href = redirectUrl;
+          })();
+          // This promise will never resolve as we're redirecting
+          return;
+        }
+
         reject(new AuthrimError('popup_blocked', 'Popup window was blocked'));
         return;
       }

@@ -27,6 +27,11 @@ describe('PopupAuth', () => {
       }),
       logout: vi.fn(),
       on: vi.fn().mockReturnValue(() => {}),
+      eventEmitter: {
+        emit: vi.fn(),
+        on: vi.fn().mockReturnValue(() => {}),
+        off: vi.fn(),
+      },
       token: {
         getAccessToken: vi.fn(),
         getTokens: vi.fn(),
@@ -125,7 +130,10 @@ describe('PopupAuth', () => {
         caughtError = e;
       });
 
-      // Simulate popup close
+      // Wait for window.open to be called (after buildAuthorizationUrl resolves)
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Simulate popup close after popup is opened
       mockPopup.closed = true;
 
       // Advance timers for the interval check
