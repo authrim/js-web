@@ -8,4 +8,4 @@ export {
   AuthStateMachine,
   type AuthStateMachineConfig,
   type StateChangeListener,
-} from './auth-state-machine.js';
+} from "./auth-state-machine.js";

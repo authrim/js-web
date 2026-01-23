@@ -10,7 +10,7 @@ import type {
   SocialNamespace,
   SignInShortcuts,
   SignUpShortcuts,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Create shortcut factories

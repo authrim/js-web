@@ -5,7 +5,11 @@
  * All sensitive data is redacted.
  */
 
-import type { AuthStateSnapshot, EventTimeline, AuthrimError } from '@authrim/core';
+import type {
+  AuthStateSnapshot,
+  EventTimeline,
+  AuthrimError,
+} from "@authrim/core";
 
 /**
  * Token state summary (no actual tokens)
@@ -28,7 +32,7 @@ export interface TokenStateSummary {
  */
 export interface StorageStateSummary {
   /** Current storage type */
-  type: 'memory' | 'sessionStorage' | 'localStorage';
+  type: "memory" | "sessionStorage" | "localStorage";
   /** Number of keys stored */
   keyCount: number;
   /** Whether storage is partitioned (ITP) */
@@ -103,7 +107,7 @@ export interface CreateDumpOptions {
   hasRefreshToken?: boolean;
   hasIdToken?: boolean;
   /** Storage type */
-  storageType?: 'memory' | 'sessionStorage' | 'localStorage';
+  storageType?: "memory" | "sessionStorage" | "localStorage";
   /** Storage key count */
   storageKeyCount?: number;
   /** Storage partitioned */
@@ -121,7 +125,7 @@ export interface CreateDumpOptions {
 }
 
 /** SDK version placeholder - should be replaced during build */
-const SDK_VERSION = '__SDK_VERSION__';
+const SDK_VERSION = "__SDK_VERSION__";
 
 /**
  * Create a debug dump
@@ -149,9 +153,11 @@ export function createDebugDump(options: CreateDumpOptions): AuthDebugDump {
   }
 
   // Truncate user agent
-  const userAgent = typeof navigator !== 'undefined'
-    ? navigator.userAgent.slice(0, 100) + (navigator.userAgent.length > 100 ? '...' : '')
-    : 'unknown';
+  const userAgent =
+    typeof navigator !== "undefined"
+      ? navigator.userAgent.slice(0, 100) +
+        (navigator.userAgent.length > 100 ? "..." : "")
+      : "unknown";
 
   return {
     timestamp: now,
@@ -165,7 +171,7 @@ export function createDebugDump(options: CreateDumpOptions): AuthDebugDump {
       isExpired,
     },
     storage: {
-      type: options.storageType ?? 'memory',
+      type: options.storageType ?? "memory",
       keyCount: options.storageKeyCount ?? 0,
       isPartitioned: options.storagePartitioned ?? null,
     },
@@ -194,53 +200,65 @@ export function createDebugDump(options: CreateDumpOptions): AuthDebugDump {
 export function formatDump(dump: AuthDebugDump): string {
   const lines: string[] = [];
 
-  lines.push('=== Authrim Debug Dump ===');
+  lines.push("=== Authrim Debug Dump ===");
   lines.push(`Timestamp: ${new Date(dump.timestamp).toISOString()}`);
   lines.push(`SDK Version: ${dump.sdkVersion}`);
-  lines.push('');
+  lines.push("");
 
-  lines.push('--- State ---');
+  lines.push("--- State ---");
   if (dump.state) {
     lines.push(`Current: ${dump.state.state}`);
-    lines.push(`Previous: ${dump.state.previousState ?? 'none'}`);
+    lines.push(`Previous: ${dump.state.previousState ?? "none"}`);
     lines.push(`Authenticated: ${dump.state.context.isAuthenticated}`);
-    lines.push(`Operation ID: ${dump.state.operationId ?? 'none'}`);
-    lines.push(`Pending: ${dump.state.context.pendingOperation ?? 'none'}`);
+    lines.push(`Operation ID: ${dump.state.operationId ?? "none"}`);
+    lines.push(`Pending: ${dump.state.context.pendingOperation ?? "none"}`);
   } else {
-    lines.push('State: not available');
+    lines.push("State: not available");
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('--- Tokens ---');
-  lines.push(`Access Token: ${dump.tokens.hasAccessToken ? 'present' : 'absent'}`);
-  lines.push(`Refresh Token: ${dump.tokens.hasRefreshToken ? 'present' : 'absent'}`);
-  lines.push(`ID Token: ${dump.tokens.hasIdToken ? 'present' : 'absent'}`);
+  lines.push("--- Tokens ---");
+  lines.push(
+    `Access Token: ${dump.tokens.hasAccessToken ? "present" : "absent"}`,
+  );
+  lines.push(
+    `Refresh Token: ${dump.tokens.hasRefreshToken ? "present" : "absent"}`,
+  );
+  lines.push(`ID Token: ${dump.tokens.hasIdToken ? "present" : "absent"}`);
   if (dump.tokens.accessTokenExpiresAt) {
     const expiresAt = new Date(dump.tokens.accessTokenExpiresAt * 1000);
-    lines.push(`Expires: ${expiresAt.toISOString()} (${dump.tokens.isExpired ? 'EXPIRED' : 'valid'})`);
+    lines.push(
+      `Expires: ${expiresAt.toISOString()} (${dump.tokens.isExpired ? "EXPIRED" : "valid"})`,
+    );
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('--- Storage ---');
+  lines.push("--- Storage ---");
   lines.push(`Type: ${dump.storage.type}`);
   lines.push(`Keys: ${dump.storage.keyCount}`);
-  lines.push(`Partitioned: ${dump.storage.isPartitioned === null ? 'unknown' : dump.storage.isPartitioned}`);
-  lines.push('');
+  lines.push(
+    `Partitioned: ${dump.storage.isPartitioned === null ? "unknown" : dump.storage.isPartitioned}`,
+  );
+  lines.push("");
 
-  lines.push('--- Environment ---');
+  lines.push("--- Environment ---");
   lines.push(`Safari: ${dump.environment.isSafari}`);
-  lines.push(`Private Mode: ${dump.environment.isPrivateMode === null ? 'unknown' : dump.environment.isPrivateMode}`);
-  lines.push(`ITP Affected: ${dump.environment.isITPAffected === null ? 'unknown' : dump.environment.isITPAffected}`);
-  lines.push('');
+  lines.push(
+    `Private Mode: ${dump.environment.isPrivateMode === null ? "unknown" : dump.environment.isPrivateMode}`,
+  );
+  lines.push(
+    `ITP Affected: ${dump.environment.isITPAffected === null ? "unknown" : dump.environment.isITPAffected}`,
+  );
+  lines.push("");
 
   if (dump.lastError) {
-    lines.push('--- Last Error ---');
+    lines.push("--- Last Error ---");
     lines.push(`Code: ${dump.lastError.code}`);
     lines.push(`Message: ${dump.lastError.message}`);
-    lines.push('');
+    lines.push("");
   }
 
-  lines.push('--- Recent Events ---');
+  lines.push("--- Recent Events ---");
   if (dump.events.recentEvents.length > 0) {
     for (const event of dump.events.recentEvents.slice(-10)) {
       const time = new Date(event.timestamp).toISOString();
@@ -250,11 +268,11 @@ export function formatDump(dump: AuthDebugDump): string {
       lines.push(`  ... and ${dump.events.totalCount - 10} more`);
     }
   } else {
-    lines.push('  No events recorded');
+    lines.push("  No events recorded");
   }
 
-  lines.push('');
-  lines.push('=========================');
+  lines.push("");
+  lines.push("=========================");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }

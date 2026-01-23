@@ -5,7 +5,7 @@
  * localStorage は明示的 opt-in のみ
  */
 
-import type { AuthrimStorage } from '@authrim/core';
+import type { AuthrimStorage } from "@authrim/core";
 
 /**
  * Browser storage options
@@ -22,7 +22,7 @@ export interface BrowserStorageOptions {
    *
    * ⚠️ localStorage を使う場合は XSS 対策を十分に行ってください。
    */
-  storage?: 'memory' | 'sessionStorage' | 'localStorage';
+  storage?: "memory" | "sessionStorage" | "localStorage";
 }
 
 /**
@@ -58,7 +58,7 @@ class MemoryStorage implements AuthrimStorage {
 class WebStorage implements AuthrimStorage {
   constructor(
     private readonly storage: Storage,
-    private readonly prefix: string
+    private readonly prefix: string,
   ) {}
 
   private key(key: string): string {
@@ -117,16 +117,16 @@ class WebStorage implements AuthrimStorage {
  * localStorage は明示的 opt-in のみ
  */
 export function createBrowserStorage(
-  options?: BrowserStorageOptions
+  options?: BrowserStorageOptions,
 ): AuthrimStorage {
-  const storageType = options?.storage ?? 'sessionStorage';
-  const prefix = options?.prefix ?? 'authrim';
+  const storageType = options?.storage ?? "sessionStorage";
+  const prefix = options?.prefix ?? "authrim";
 
-  if (storageType === 'memory') {
+  if (storageType === "memory") {
     return new MemoryStorage();
   }
 
   const storage =
-    storageType === 'localStorage' ? localStorage : sessionStorage;
+    storageType === "localStorage" ? localStorage : sessionStorage;
   return new WebStorage(storage, prefix);
 }

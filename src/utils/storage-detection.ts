@@ -4,20 +4,24 @@
  * Detects storage availability and private browsing mode.
  */
 
-import type { EventEmitter } from '@authrim/core';
+import type { EventEmitter } from "@authrim/core";
 
 /**
  * Storage availability result
  */
 export interface StorageAvailability {
   /** Best available storage type */
-  available: 'localStorage' | 'sessionStorage' | 'memory';
+  available: "localStorage" | "sessionStorage" | "memory";
   /** Whether localStorage is available */
   localStorage: boolean;
   /** Whether sessionStorage is available */
   sessionStorage: boolean;
   /** Reason if storage is limited */
-  reason?: 'not_available' | 'quota_exceeded' | 'private_mode' | 'security_error';
+  reason?:
+    | "not_available"
+    | "quota_exceeded"
+    | "private_mode"
+    | "security_error";
 }
 
 /**
@@ -27,7 +31,7 @@ export interface StorageAvailability {
  * @returns True if storage is available
  */
 function testStorage(storage: Storage): boolean {
-  const testKey = '__authrim_storage_test__';
+  const testKey = "__authrim_storage_test__";
   try {
     storage.setItem(testKey, testKey);
     storage.removeItem(testKey);
@@ -45,30 +49,33 @@ function testStorage(storage: Storage): boolean {
 export function detectStorageAvailability(): StorageAvailability {
   let localStorageAvailable = false;
   let sessionStorageAvailable = false;
-  let reason: StorageAvailability['reason'];
+  let reason: StorageAvailability["reason"];
 
   // Test localStorage
   try {
-    if (typeof localStorage !== 'undefined') {
+    if (typeof localStorage !== "undefined") {
       localStorageAvailable = testStorage(localStorage);
       if (!localStorageAvailable) {
-        reason = 'not_available';
+        reason = "not_available";
       }
     }
   } catch (e) {
     if (e instanceof DOMException) {
-      if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-        reason = 'quota_exceeded';
-      } else if (e.name === 'SecurityError') {
-        reason = 'security_error';
+      if (
+        e.name === "QuotaExceededError" ||
+        e.name === "NS_ERROR_DOM_QUOTA_REACHED"
+      ) {
+        reason = "quota_exceeded";
+      } else if (e.name === "SecurityError") {
+        reason = "security_error";
       }
     }
-    reason = reason ?? 'not_available';
+    reason = reason ?? "not_available";
   }
 
   // Test sessionStorage
   try {
-    if (typeof sessionStorage !== 'undefined') {
+    if (typeof sessionStorage !== "undefined") {
       sessionStorageAvailable = testStorage(sessionStorage);
     }
   } catch {
@@ -76,12 +83,12 @@ export function detectStorageAvailability(): StorageAvailability {
   }
 
   // Determine best available
-  let available: StorageAvailability['available'] = 'memory';
+  let available: StorageAvailability["available"] = "memory";
   if (localStorageAvailable) {
-    available = 'localStorage';
+    available = "localStorage";
   } else if (sessionStorageAvailable) {
-    available = 'sessionStorage';
-    reason = reason ?? 'private_mode'; // Likely private mode if localStorage fails but sessionStorage works
+    available = "sessionStorage";
+    reason = reason ?? "private_mode"; // Likely private mode if localStorage fails but sessionStorage works
   }
 
   return {
@@ -99,9 +106,9 @@ export interface PrivateModeDetection {
   /** Whether private mode was detected */
   isPrivateMode: boolean;
   /** Detected browser (if private mode) */
-  browser: 'safari' | 'firefox' | 'chrome' | 'edge' | 'unknown';
+  browser: "safari" | "firefox" | "chrome" | "edge" | "unknown";
   /** Detection method used */
-  method: 'storage' | 'quota' | 'filesystem' | 'indexeddb' | 'unknown';
+  method: "storage" | "quota" | "filesystem" | "indexeddb" | "unknown";
 }
 
 /**
@@ -112,55 +119,60 @@ export interface PrivateModeDetection {
  * @returns Private mode detection result
  */
 export async function detectPrivateMode(): Promise<PrivateModeDetection> {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+  const ua =
+    typeof navigator !== "undefined" ? navigator.userAgent.toLowerCase() : "";
 
   // Detect browser
-  let browser: PrivateModeDetection['browser'] = 'unknown';
-  if (ua.includes('safari') && !ua.includes('chrome')) {
-    browser = 'safari';
-  } else if (ua.includes('firefox')) {
-    browser = 'firefox';
-  } else if (ua.includes('edg')) {
-    browser = 'edge';
-  } else if (ua.includes('chrome')) {
-    browser = 'chrome';
+  let browser: PrivateModeDetection["browser"] = "unknown";
+  if (ua.includes("safari") && !ua.includes("chrome")) {
+    browser = "safari";
+  } else if (ua.includes("firefox")) {
+    browser = "firefox";
+  } else if (ua.includes("edg")) {
+    browser = "edge";
+  } else if (ua.includes("chrome")) {
+    browser = "chrome";
   }
 
   // Safari detection: localStorage quota in private mode
-  if (browser === 'safari') {
+  if (browser === "safari") {
     try {
-      localStorage.setItem('__private_test__', 'test');
-      localStorage.removeItem('__private_test__');
+      localStorage.setItem("__private_test__", "test");
+      localStorage.removeItem("__private_test__");
     } catch {
-      return { isPrivateMode: true, browser: 'safari', method: 'storage' };
+      return { isPrivateMode: true, browser: "safari", method: "storage" };
     }
   }
 
   // Firefox detection: IndexedDB not available in private mode (older versions)
-  if (browser === 'firefox') {
+  if (browser === "firefox") {
     try {
-      const db = indexedDB.open('__private_test__');
+      const db = indexedDB.open("__private_test__");
       await new Promise<void>((resolve, reject) => {
         db.onsuccess = () => {
           db.result.close();
-          indexedDB.deleteDatabase('__private_test__');
+          indexedDB.deleteDatabase("__private_test__");
           resolve();
         };
         db.onerror = () => reject();
       });
     } catch {
-      return { isPrivateMode: true, browser: 'firefox', method: 'indexeddb' };
+      return { isPrivateMode: true, browser: "firefox", method: "indexeddb" };
     }
   }
 
   // Chrome/Edge detection: storage quota is limited in incognito
-  if (browser === 'chrome' || browser === 'edge') {
-    if (typeof navigator !== 'undefined' && 'storage' in navigator && 'estimate' in navigator.storage) {
+  if (browser === "chrome" || browser === "edge") {
+    if (
+      typeof navigator !== "undefined" &&
+      "storage" in navigator &&
+      "estimate" in navigator.storage
+    ) {
       try {
         const estimate = await navigator.storage.estimate();
         // In incognito mode, quota is typically much lower (around 120MB)
         if (estimate.quota && estimate.quota < 200 * 1024 * 1024) {
-          return { isPrivateMode: true, browser, method: 'quota' };
+          return { isPrivateMode: true, browser, method: "quota" };
         }
       } catch {
         // Can't determine
@@ -171,10 +183,10 @@ export async function detectPrivateMode(): Promise<PrivateModeDetection> {
   // General fallback: check localStorage
   const storageAvailability = detectStorageAvailability();
   if (!storageAvailability.localStorage && storageAvailability.sessionStorage) {
-    return { isPrivateMode: true, browser, method: 'storage' };
+    return { isPrivateMode: true, browser, method: "storage" };
   }
 
-  return { isPrivateMode: false, browser, method: 'unknown' };
+  return { isPrivateMode: false, browser, method: "unknown" };
 }
 
 /**
@@ -187,16 +199,16 @@ export async function detectPrivateMode(): Promise<PrivateModeDetection> {
  */
 export function emitStorageFallbackWarning(
   eventEmitter: EventEmitter,
-  requestedStorage: 'localStorage' | 'sessionStorage',
-  actualStorage: 'sessionStorage' | 'memory',
-  reason: StorageAvailability['reason']
+  requestedStorage: "localStorage" | "sessionStorage",
+  actualStorage: "sessionStorage" | "memory",
+  reason: StorageAvailability["reason"],
 ): void {
-  eventEmitter.emit('warning:storage_fallback', {
+  eventEmitter.emit("warning:storage_fallback", {
     from: requestedStorage,
     to: actualStorage,
-    reason: reason ?? 'not_available',
+    reason: reason ?? "not_available",
     timestamp: Date.now(),
-    source: 'web',
+    source: "web",
   });
 }
 
@@ -208,24 +220,24 @@ export function emitStorageFallbackWarning(
  */
 export function emitPrivateModeWarning(
   eventEmitter: EventEmitter,
-  detection: PrivateModeDetection
+  detection: PrivateModeDetection,
 ): void {
   if (detection.isPrivateMode) {
     const limitations: string[] = [];
 
-    if (detection.browser === 'safari') {
-      limitations.push('localStorage may be cleared on tab close');
-      limitations.push('ITP may block third-party cookies');
+    if (detection.browser === "safari") {
+      limitations.push("localStorage may be cleared on tab close");
+      limitations.push("ITP may block third-party cookies");
     } else {
-      limitations.push('Storage may be cleared when browser closes');
-      limitations.push('Session will not persist across browser restarts');
+      limitations.push("Storage may be cleared when browser closes");
+      limitations.push("Session will not persist across browser restarts");
     }
 
-    eventEmitter.emit('warning:private_mode', {
+    eventEmitter.emit("warning:private_mode", {
       browser: detection.browser,
       limitations,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
     });
   }
 }

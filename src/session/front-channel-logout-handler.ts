@@ -34,7 +34,7 @@
 import {
   FrontChannelLogoutUrlBuilder,
   type FrontChannelLogoutParams,
-} from '@authrim/core';
+} from "@authrim/core";
 
 /**
  * Options for FrontChannelLogoutHandler
@@ -100,7 +100,9 @@ export class FrontChannelLogoutHandler {
   private readonly sessionId?: string;
   private readonly requireIss: boolean;
   private readonly requireSid: boolean;
-  private readonly onLogout?: (params: FrontChannelLogoutParams) => void | Promise<void>;
+  private readonly onLogout?: (
+    params: FrontChannelLogoutParams,
+  ) => void | Promise<void>;
 
   constructor(options: FrontChannelLogoutHandlerOptions) {
     this.builder = new FrontChannelLogoutUrlBuilder();
@@ -117,10 +119,10 @@ export class FrontChannelLogoutHandler {
    * @returns Handle result
    */
   async handleCurrentUrl(): Promise<FrontChannelLogoutHandleResult> {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       return {
         success: false,
-        error: 'window is not available',
+        error: "window is not available",
       };
     }
 
@@ -177,7 +179,7 @@ export class FrontChannelLogoutHandler {
    * @returns true if the URL has logout-related parameters
    */
   isLogoutRequest(): boolean {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       return false;
     }
 
@@ -185,7 +187,7 @@ export class FrontChannelLogoutHandler {
       const url = new URL(window.location.href);
       // A logout request typically has iss and/or sid parameters
       // At minimum, we check for presence of either
-      return url.searchParams.has('iss') || url.searchParams.has('sid');
+      return url.searchParams.has("iss") || url.searchParams.has("sid");
     } catch {
       return false;
     }
@@ -200,7 +202,7 @@ export class FrontChannelLogoutHandler {
   isLogoutRequestUrl(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.searchParams.has('iss') || urlObj.searchParams.has('sid');
+      return urlObj.searchParams.has("iss") || urlObj.searchParams.has("sid");
     } catch {
       return false;
     }

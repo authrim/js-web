@@ -5,17 +5,17 @@
  * Includes leader election for coordinating token refresh.
  */
 
-import type { EventEmitter, Session } from '@authrim/core';
+import type { EventEmitter, Session } from "@authrim/core";
 
 /**
  * Tab sync message types
  */
 export type TabSyncMessageType =
-  | 'heartbeat'
-  | 'session_change'
-  | 'logout'
-  | 'leader_claim'
-  | 'leader_release';
+  | "heartbeat"
+  | "session_change"
+  | "logout"
+  | "leader_claim"
+  | "leader_release";
 
 /**
  * Tab sync message
@@ -56,8 +56,12 @@ export class TabSyncManager {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private leaderCheckInterval: ReturnType<typeof setInterval> | null = null;
 
-  private readonly config: Required<Omit<TabSyncConfig, 'eventEmitter'>> & { eventEmitter?: EventEmitter };
-  private readonly onLeaderChangeCallbacks = new Set<(isLeader: boolean) => void>();
+  private readonly config: Required<Omit<TabSyncConfig, "eventEmitter">> & {
+    eventEmitter?: EventEmitter;
+  };
+  private readonly onLeaderChangeCallbacks = new Set<
+    (isLeader: boolean) => void
+  >();
 
   /** Default heartbeat interval: 5 seconds */
   private static readonly DEFAULT_HEARTBEAT_INTERVAL_MS = 5000;
@@ -70,9 +74,12 @@ export class TabSyncManager {
     this.tabId = this.generateTabId();
 
     this.config = {
-      channelName: config?.channelName ?? 'authrim-session',
-      heartbeatIntervalMs: config?.heartbeatIntervalMs ?? TabSyncManager.DEFAULT_HEARTBEAT_INTERVAL_MS,
-      leaderTimeoutMs: config?.leaderTimeoutMs ?? TabSyncManager.DEFAULT_LEADER_TIMEOUT_MS,
+      channelName: config?.channelName ?? "authrim-session",
+      heartbeatIntervalMs:
+        config?.heartbeatIntervalMs ??
+        TabSyncManager.DEFAULT_HEARTBEAT_INTERVAL_MS,
+      leaderTimeoutMs:
+        config?.leaderTimeoutMs ?? TabSyncManager.DEFAULT_LEADER_TIMEOUT_MS,
       eventEmitter: config?.eventEmitter,
     };
   }
@@ -82,7 +89,7 @@ export class TabSyncManager {
    */
   private generateTabId(): string {
     const array = new Uint8Array(8);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
       crypto.getRandomValues(array);
     } else {
       // Fallback for older browsers
@@ -90,7 +97,7 @@ export class TabSyncManager {
         array[i] = Math.floor(Math.random() * 256);
       }
     }
-    return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   /**
@@ -98,7 +105,7 @@ export class TabSyncManager {
    */
   initialize(): void {
     // Check if BroadcastChannel is supported
-    if (typeof BroadcastChannel === 'undefined') {
+    if (typeof BroadcastChannel === "undefined") {
       return;
     }
 
@@ -130,19 +137,19 @@ export class TabSyncManager {
     }
 
     switch (message.type) {
-      case 'heartbeat':
+      case "heartbeat":
         this.handleHeartbeat(message);
         break;
-      case 'session_change':
+      case "session_change":
         this.handleSessionChange(message);
         break;
-      case 'logout':
+      case "logout":
         this.handleLogout(message);
         break;
-      case 'leader_claim':
+      case "leader_claim":
         this.handleLeaderClaim(message);
         break;
-      case 'leader_release':
+      case "leader_release":
         this.handleLeaderRelease(message);
         break;
     }
@@ -161,11 +168,11 @@ export class TabSyncManager {
    * Handle session change from other tabs
    */
   private handleSessionChange(message: TabSyncMessage): void {
-    this.config.eventEmitter?.emit('session:sync', {
-      action: 'refresh',
+    this.config.eventEmitter?.emit("session:sync", {
+      action: "refresh",
       sourceTabId: message.tabId,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
     });
   }
 
@@ -173,10 +180,10 @@ export class TabSyncManager {
    * Handle logout from other tabs
    */
   private handleLogout(message: TabSyncMessage): void {
-    this.config.eventEmitter?.emit('session:logout:broadcast', {
+    this.config.eventEmitter?.emit("session:logout:broadcast", {
       sourceTabId: message.tabId,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
     });
   }
 
@@ -219,7 +226,11 @@ export class TabSyncManager {
   private startHeartbeat(): void {
     this.heartbeatInterval = setInterval(() => {
       if (this.isLeader) {
-        this.send({ type: 'heartbeat', tabId: this.tabId, timestamp: Date.now() });
+        this.send({
+          type: "heartbeat",
+          tabId: this.tabId,
+          timestamp: Date.now(),
+        });
       }
     }, this.config.heartbeatIntervalMs);
   }
@@ -246,7 +257,11 @@ export class TabSyncManager {
     this.isLeader = true;
     this.leaderTabId = this.tabId;
     this.lastLeaderHeartbeat = Date.now();
-    this.send({ type: 'leader_claim', tabId: this.tabId, timestamp: Date.now() });
+    this.send({
+      type: "leader_claim",
+      tabId: this.tabId,
+      timestamp: Date.now(),
+    });
     this.notifyLeaderChange();
   }
 
@@ -256,7 +271,11 @@ export class TabSyncManager {
   private releaseLeadership(): void {
     if (this.isLeader) {
       this.isLeader = false;
-      this.send({ type: 'leader_release', tabId: this.tabId, timestamp: Date.now() });
+      this.send({
+        type: "leader_release",
+        tabId: this.tabId,
+        timestamp: Date.now(),
+      });
     }
   }
 
@@ -284,11 +303,11 @@ export class TabSyncManager {
     }
 
     // Emit session:sync event for leader change
-    this.config.eventEmitter?.emit('session:sync', {
-      action: 'leader_change',
+    this.config.eventEmitter?.emit("session:sync", {
+      action: "leader_change",
       sourceTabId: this.tabId,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
     });
   }
 
@@ -324,7 +343,7 @@ export class TabSyncManager {
    */
   broadcastSessionChange(session: Session | null): void {
     this.send({
-      type: 'session_change',
+      type: "session_change",
       tabId: this.tabId,
       timestamp: Date.now(),
       data: { hasSession: !!session },
@@ -336,7 +355,7 @@ export class TabSyncManager {
    */
   broadcastLogout(): void {
     this.send({
-      type: 'logout',
+      type: "logout",
       tabId: this.tabId,
       timestamp: Date.now(),
     });

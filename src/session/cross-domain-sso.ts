@@ -16,8 +16,8 @@
  * - POST /auth/session/refresh - セッション延長
  */
 
-import { AuthrimError } from '@authrim/core';
-import { BrowserHttpClient } from '../providers/http.js';
+import { AuthrimError } from "@authrim/core";
+import { BrowserHttpClient } from "../providers/http.js";
 
 /**
  * Session token response from IdP
@@ -56,7 +56,7 @@ export class CrossDomainSSO {
 
   constructor(
     private readonly http: BrowserHttpClient,
-    issuer: string
+    issuer: string,
   ) {
     // P0: パスを統一（/auth/session/* で揃える）
     this.sessionApiBase = `${issuer}/auth/session`;
@@ -80,14 +80,14 @@ export class CrossDomainSSO {
     const url = `${this.sessionApiBase}/token`;
 
     const response = await this.http.fetch(url, {
-      method: 'POST',
-      credentials: 'include', // P0: セッション Cookie を送信
+      method: "POST",
+      credentials: "include", // P0: セッション Cookie を送信
     });
 
     if (!response.ok) {
       throw new AuthrimError(
-        'session_check_failed',
-        'Failed to issue session token'
+        "session_check_failed",
+        "Failed to issue session token",
       );
     }
 
@@ -104,8 +104,8 @@ export class CrossDomainSSO {
     const url = `${this.sessionApiBase}/status`;
 
     const response = await this.http.fetch(url, {
-      method: 'GET',
-      credentials: 'include', // P0: セッション Cookie を送信
+      method: "GET",
+      credentials: "include", // P0: セッション Cookie を送信
     });
 
     return response.data as SessionStatusResponse;
@@ -118,16 +118,16 @@ export class CrossDomainSSO {
     const url = `${this.sessionApiBase}/refresh`;
 
     const response = await this.http.fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ extend_seconds: extendSeconds }),
-      credentials: 'include', // P0: セッション Cookie を送信
+      credentials: "include", // P0: セッション Cookie を送信
     });
 
     if (!response.ok) {
       throw new AuthrimError(
-        'session_check_failed',
-        'Failed to refresh session'
+        "session_check_failed",
+        "Failed to refresh session",
       );
     }
   }

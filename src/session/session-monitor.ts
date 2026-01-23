@@ -7,21 +7,24 @@
  * This is the main interface for OIDC Session Management on the RP side.
  */
 
-import { CheckSessionIframeManager, type CheckSessionIframeManagerOptions } from './check-session-iframe.js';
+import {
+  CheckSessionIframeManager,
+  type CheckSessionIframeManagerOptions,
+} from "./check-session-iframe.js";
 
 /**
  * Session monitor event types
  */
 export type SessionMonitorEventType =
-  | 'session:changed'
-  | 'session:unchanged'
-  | 'session:error'
-  | 'session:stopped';
+  | "session:changed"
+  | "session:unchanged"
+  | "session:error"
+  | "session:stopped";
 
 /**
  * Reason for session monitor stopping
  */
-export type SessionStoppedReason = 'user_stopped' | 'too_many_errors';
+export type SessionStoppedReason = "user_stopped" | "too_many_errors";
 
 /**
  * Session monitor event payload
@@ -127,7 +130,7 @@ export class SessionMonitor {
   async start(initialSessionState: string): Promise<void> {
     // Prevent double start
     if (this._running) {
-      console.warn('[SessionMonitor] Already running, ignoring start()');
+      console.warn("[SessionMonitor] Already running, ignoring start()");
       return;
     }
 
@@ -155,7 +158,7 @@ export class SessionMonitor {
       return;
     }
 
-    this.stopInternal('user_stopped');
+    this.stopInternal("user_stopped");
   }
 
   private stopInternal(reason: SessionStoppedReason): void {
@@ -169,7 +172,7 @@ export class SessionMonitor {
 
     // Always emit stopped event
     this.emit({
-      type: 'session:stopped',
+      type: "session:stopped",
       previousState: this.currentSessionState,
       currentState: null,
       reason,
@@ -217,10 +220,12 @@ export class SessionMonitor {
     const previousState = this.currentSessionState;
 
     try {
-      const result = await this.iframeManager.checkSession(this.currentSessionState);
+      const result = await this.iframeManager.checkSession(
+        this.currentSessionState,
+      );
 
       if (!result.success) {
-        this.handleError(result.error ?? new Error('Unknown error'));
+        this.handleError(result.error ?? new Error("Unknown error"));
         return;
       }
 
@@ -228,28 +233,30 @@ export class SessionMonitor {
       this.consecutiveErrors = 0;
 
       switch (result.response) {
-        case 'changed':
+        case "changed":
           this.emit({
-            type: 'session:changed',
+            type: "session:changed",
             previousState,
             currentState: null, // Changed means we don't know the new state
           });
           break;
 
-        case 'unchanged':
+        case "unchanged":
           this.emit({
-            type: 'session:unchanged',
+            type: "session:unchanged",
             previousState,
             currentState: this.currentSessionState,
           });
           break;
 
-        case 'error':
-          this.handleError(new Error('OP returned error'));
+        case "error":
+          this.handleError(new Error("OP returned error"));
           break;
       }
     } catch (error) {
-      this.handleError(error instanceof Error ? error : new Error(String(error)));
+      this.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -257,7 +264,7 @@ export class SessionMonitor {
     this.consecutiveErrors++;
 
     this.emit({
-      type: 'session:error',
+      type: "session:error",
       previousState: this.currentSessionState,
       currentState: this.currentSessionState,
       error,
@@ -265,7 +272,7 @@ export class SessionMonitor {
 
     // Stop after too many consecutive errors
     if (this.consecutiveErrors >= this.maxErrors) {
-      this.stopInternal('too_many_errors');
+      this.stopInternal("too_many_errors");
     }
   }
 
@@ -274,7 +281,7 @@ export class SessionMonitor {
       try {
         handler(event);
       } catch (error) {
-        console.error('[SessionMonitor] Error in event handler:', error);
+        console.error("[SessionMonitor] Error in event handler:", error);
       }
     }
   }

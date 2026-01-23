@@ -1,6 +1,6 @@
 {
   "name": "@authrim/web",
-  "version": "0.1.1",
+  "version": "0.1.8",
   "description": "Browser implementation for Authrim SDK",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -62,7 +62,7 @@
     "url": "https://github.com/authrim/js-web/issues"
   },
   "dependencies": {
-    "@authrim/core": "^0.1.3"
+    "@authrim/core": "^0.1.10"
   },
   "devDependencies": {
     "@types/jsdom": "^27.0.0",

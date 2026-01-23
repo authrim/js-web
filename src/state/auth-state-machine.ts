@@ -10,7 +10,7 @@ import type {
   AuthStateSnapshot,
   AuthrimError,
   EventEmitter,
-} from '@authrim/core';
+} from "@authrim/core";
 
 /**
  * State machine configuration
@@ -36,7 +36,7 @@ export type StateChangeListener = (snapshot: AuthStateSnapshot) => void;
  * Provides subscribable state updates for UI integration.
  */
 export class AuthStateMachine {
-  private state: AuthState = 'idle';
+  private state: AuthState = "idle";
   private previousState: AuthState | null = null;
   private operationId: string | null = null;
   private isAuthenticated = false;
@@ -51,7 +51,9 @@ export class AuthStateMachine {
     // Initialize with provided state
     if (config.initialAuthenticated !== undefined) {
       this.isAuthenticated = config.initialAuthenticated;
-      this.state = config.initialAuthenticated ? 'authenticated' : 'unauthenticated';
+      this.state = config.initialAuthenticated
+        ? "authenticated"
+        : "unauthenticated";
     }
     if (config.initialTokenExpiresAt !== undefined) {
       this.tokenExpiresAt = config.initialTokenExpiresAt;
@@ -69,131 +71,131 @@ export class AuthStateMachine {
 
     // Auth lifecycle events
     this.unsubscribers.push(
-      emitter.on('auth:init', () => {
-        this.transition('initializing');
-      })
+      emitter.on("auth:init", () => {
+        this.transition("initializing");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:redirecting', (event) => {
+      emitter.on("auth:redirecting", (event) => {
         this.operationId = event.operationId ?? null;
-        this.pendingOperation = 'redirect';
-        this.transition('authenticating');
-      })
+        this.pendingOperation = "redirect";
+        this.transition("authenticating");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:callback:processing', (event) => {
+      emitter.on("auth:callback:processing", (event) => {
         this.operationId = event.operationId ?? null;
-        this.pendingOperation = 'callback';
-        this.transition('authenticating');
-      })
+        this.pendingOperation = "callback";
+        this.transition("authenticating");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:callback:complete', (event) => {
+      emitter.on("auth:callback:complete", (event) => {
         if (event.success) {
           this.isAuthenticated = true;
-          this.transition('authenticated');
+          this.transition("authenticated");
         } else {
-          this.transition('error');
+          this.transition("error");
         }
         this.operationId = null;
         this.pendingOperation = null;
-      })
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:login:complete', () => {
+      emitter.on("auth:login:complete", () => {
         this.isAuthenticated = true;
         this.pendingOperation = null;
-        this.transition('authenticated');
-      })
+        this.transition("authenticated");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:logout:complete', () => {
+      emitter.on("auth:logout:complete", () => {
         this.isAuthenticated = false;
         this.tokenExpiresAt = null;
         this.pendingOperation = null;
-        this.transition('unauthenticated');
-      })
+        this.transition("unauthenticated");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('auth:required', () => {
+      emitter.on("auth:required", () => {
         this.isAuthenticated = false;
-        this.transition('unauthenticated');
-      })
+        this.transition("unauthenticated");
+      }),
     );
 
     // Token lifecycle events
     this.unsubscribers.push(
-      emitter.on('token:refreshing', (event) => {
+      emitter.on("token:refreshing", (event) => {
         this.operationId = event.operationId ?? null;
-        this.pendingOperation = 'refresh';
-        this.transition('refreshing');
-      })
+        this.pendingOperation = "refresh";
+        this.transition("refreshing");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('token:refreshed', (event) => {
+      emitter.on("token:refreshed", (event) => {
         this.isAuthenticated = true;
         this.tokenExpiresAt = event.expiresAt;
         this.pendingOperation = null;
         this.lastError = null;
-        this.transition('authenticated');
-      })
+        this.transition("authenticated");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('token:refresh:failed', (event) => {
+      emitter.on("token:refresh:failed", (event) => {
         this.lastError = event.error;
         if (!event.willRetry) {
           this.pendingOperation = null;
           // Stay in refreshing if retrying, otherwise check auth state
           if (!this.isAuthenticated) {
-            this.transition('unauthenticated');
+            this.transition("unauthenticated");
           } else {
-            this.transition('error');
+            this.transition("error");
           }
         }
-      })
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('token:expired', () => {
+      emitter.on("token:expired", () => {
         // Token expired but may still have refresh token
         // Let auth:required handle the actual unauthenticated transition
-      })
+      }),
     );
 
     // Error events
     this.unsubscribers.push(
-      emitter.on('error:fatal', (event) => {
+      emitter.on("error:fatal", (event) => {
         this.lastError = event.error;
         this.pendingOperation = null;
-        this.transition('error');
-      })
+        this.transition("error");
+      }),
     );
 
     // Session events
     this.unsubscribers.push(
-      emitter.on('session:ended', () => {
+      emitter.on("session:ended", () => {
         this.isAuthenticated = false;
         this.tokenExpiresAt = null;
-        this.transition('unauthenticated');
-      })
+        this.transition("unauthenticated");
+      }),
     );
 
     this.unsubscribers.push(
-      emitter.on('session:logout:broadcast', () => {
+      emitter.on("session:logout:broadcast", () => {
         this.isAuthenticated = false;
         this.tokenExpiresAt = null;
-        this.transition('logging_out');
+        this.transition("logging_out");
         // Immediately transition to unauthenticated
-        this.transition('unauthenticated');
-      })
+        this.transition("unauthenticated");
+      }),
     );
   }
 
@@ -211,12 +213,12 @@ export class AuthStateMachine {
     const snapshot = this.getSnapshot();
 
     // Emit state:change event
-    this.config.eventEmitter.emit('state:change', {
+    this.config.eventEmitter.emit("state:change", {
       from: this.previousState,
       to: newState,
       snapshot,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
       operationId: this.operationId ?? undefined,
     });
 
@@ -278,7 +280,7 @@ export class AuthStateMachine {
     if (tokenExpiresAt !== undefined) {
       this.tokenExpiresAt = tokenExpiresAt;
     }
-    this.transition(authenticated ? 'authenticated' : 'unauthenticated');
+    this.transition(authenticated ? "authenticated" : "unauthenticated");
   }
 
   /**
@@ -286,8 +288,10 @@ export class AuthStateMachine {
    */
   clearError(): void {
     this.lastError = null;
-    if (this.state === 'error') {
-      this.transition(this.isAuthenticated ? 'authenticated' : 'unauthenticated');
+    if (this.state === "error") {
+      this.transition(
+        this.isAuthenticated ? "authenticated" : "unauthenticated",
+      );
     }
   }
 

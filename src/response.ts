@@ -5,8 +5,13 @@
  * This is the boundary between internal implementation and public API
  */
 
-import type { AuthResult, DirectAuthError, EmailCodeSendResult, PasskeyCredential } from '@authrim/core';
-import type { AuthResponse, AuthError, AuthSessionData } from './types.js';
+import type {
+  AuthResult,
+  DirectAuthError,
+  EmailCodeSendResult,
+  PasskeyCredential,
+} from "@authrim/core";
+import type { AuthResponse, AuthError, AuthSessionData } from "./types.js";
 
 /**
  * Convert DirectAuthError to AuthError
@@ -39,7 +44,9 @@ export function failure<T>(error: AuthError): AuthResponse<T> {
 /**
  * Create an error response from DirectAuthError
  */
-export function failureFromDirectAuth<T>(error: DirectAuthError): AuthResponse<T> {
+export function failureFromDirectAuth<T>(
+  error: DirectAuthError,
+): AuthResponse<T> {
   return { data: null, error: toAuthError(error) };
 }
 
@@ -51,7 +58,7 @@ export function failureFromParams<T>(params: {
   error: string;
   message: string;
   retryable?: boolean;
-  severity?: 'info' | 'warn' | 'error' | 'critical';
+  severity?: "info" | "warn" | "error" | "critical";
   cause?: unknown;
 }): AuthResponse<T> {
   return {
@@ -61,7 +68,7 @@ export function failureFromParams<T>(params: {
       error: params.error,
       message: params.message,
       retryable: params.retryable ?? false,
-      severity: params.severity ?? 'error',
+      severity: params.severity ?? "error",
       cause: params.cause,
     },
   };
@@ -72,7 +79,9 @@ export function failureFromParams<T>(params: {
  *
  * Use this at the boundary between internal Direct Auth and public API
  */
-export function authResultToResponse(result: AuthResult): AuthResponse<AuthSessionData> {
+export function authResultToResponse(
+  result: AuthResult,
+): AuthResponse<AuthSessionData> {
   if (result.success && result.session && result.user) {
     return success({
       session: result.session,
@@ -87,11 +96,11 @@ export function authResultToResponse(result: AuthResult): AuthResponse<AuthSessi
 
   // Edge case: success but no session/user (should not happen normally)
   return failureFromParams({
-    code: 'AR000001',
-    error: 'unexpected_result',
-    message: 'Authentication completed but no session data received',
+    code: "AR000001",
+    error: "unexpected_result",
+    message: "Authentication completed but no session data received",
     retryable: false,
-    severity: 'error',
+    severity: "error",
   });
 }
 
@@ -99,7 +108,7 @@ export function authResultToResponse(result: AuthResult): AuthResponse<AuthSessi
  * Convert EmailCodeSendResult to AuthResponse
  */
 export function emailCodeSendResultToResponse(
-  result: EmailCodeSendResult
+  result: EmailCodeSendResult,
 ): AuthResponse<EmailCodeSendResult> {
   return success(result);
 }
@@ -108,7 +117,7 @@ export function emailCodeSendResultToResponse(
  * Convert PasskeyCredential to AuthResponse
  */
 export function passkeyCredentialToResponse(
-  credential: PasskeyCredential
+  credential: PasskeyCredential,
 ): AuthResponse<PasskeyCredential> {
   return success(credential);
 }
@@ -120,7 +129,7 @@ export function passkeyCredentialToResponse(
  */
 export async function wrapWithAuthResponse<T>(
   fn: () => Promise<T>,
-  errorCode: string = 'AR000000'
+  errorCode: string = "AR000000",
 ): Promise<AuthResponse<T>> {
   try {
     const result = await fn();
@@ -129,20 +138,20 @@ export async function wrapWithAuthResponse<T>(
     if (error instanceof Error) {
       return failureFromParams({
         code: errorCode,
-        error: 'operation_failed',
+        error: "operation_failed",
         message: error.message,
         retryable: false,
-        severity: 'error',
+        severity: "error",
         cause: error,
       });
     }
 
     return failureFromParams({
       code: errorCode,
-      error: 'unknown_error',
-      message: 'An unknown error occurred',
+      error: "unknown_error",
+      message: "An unknown error occurred",
       retryable: false,
-      severity: 'error',
+      severity: "error",
       cause: error,
     });
   }
@@ -153,7 +162,10 @@ export async function wrapWithAuthResponse<T>(
  * Handles the case where session is null (not authenticated)
  */
 export function sessionGetToResponse(
-  session: { session: import('@authrim/core').Session; user: import('@authrim/core').User } | null
+  session: {
+    session: import("@authrim/core").Session;
+    user: import("@authrim/core").User;
+  } | null,
 ): AuthResponse<AuthSessionData | null> {
   if (session) {
     return success({

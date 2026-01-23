@@ -33,7 +33,7 @@ interface RedirectEntry {
 const DEFAULT_LOOP_CONFIG: Required<RedirectLoopConfig> = {
   maxRedirects: 3,
   windowMs: 10000,
-  storageKey: 'authrim:redirect_tracking',
+  storageKey: "authrim:redirect_tracking",
 };
 
 /**
@@ -42,8 +42,11 @@ const DEFAULT_LOOP_CONFIG: Required<RedirectLoopConfig> = {
  * @param state - State parameter for the redirect
  * @param config - Loop detection configuration
  */
-export function trackRedirect(state?: string, config?: RedirectLoopConfig): void {
-  if (typeof sessionStorage === 'undefined') {
+export function trackRedirect(
+  state?: string,
+  config?: RedirectLoopConfig,
+): void {
+  if (typeof sessionStorage === "undefined") {
     return;
   }
 
@@ -59,7 +62,7 @@ export function trackRedirect(state?: string, config?: RedirectLoopConfig): void
 
     // Clean old entries outside the window
     const validEntries = entries.filter(
-      (entry) => now - entry.timestamp < cfg.windowMs
+      (entry) => now - entry.timestamp < cfg.windowMs,
     );
 
     sessionStorage.setItem(cfg.storageKey, JSON.stringify(validEntries));
@@ -75,7 +78,7 @@ export function trackRedirect(state?: string, config?: RedirectLoopConfig): void
  * @returns True if redirect loop is detected
  */
 export function isRedirectLoop(config?: RedirectLoopConfig): boolean {
-  if (typeof sessionStorage === 'undefined') {
+  if (typeof sessionStorage === "undefined") {
     return false;
   }
 
@@ -92,7 +95,7 @@ export function isRedirectLoop(config?: RedirectLoopConfig): boolean {
 
     // Count redirects within the time window
     const recentRedirects = entries.filter(
-      (entry) => now - entry.timestamp < cfg.windowMs
+      (entry) => now - entry.timestamp < cfg.windowMs,
     );
 
     return recentRedirects.length >= cfg.maxRedirects;
@@ -109,7 +112,7 @@ export function isRedirectLoop(config?: RedirectLoopConfig): boolean {
  * @param config - Loop detection configuration
  */
 export function clearRedirectTracking(config?: RedirectLoopConfig): void {
-  if (typeof sessionStorage === 'undefined') {
+  if (typeof sessionStorage === "undefined") {
     return;
   }
 
@@ -139,13 +142,13 @@ export function getRedirectLoopInfo(config?: RedirectLoopConfig): {
 
   let redirectCount = 0;
 
-  if (typeof sessionStorage !== 'undefined') {
+  if (typeof sessionStorage !== "undefined") {
     try {
       const stored = sessionStorage.getItem(cfg.storageKey);
       if (stored) {
         const entries: RedirectEntry[] = JSON.parse(stored);
         redirectCount = entries.filter(
-          (entry) => now - entry.timestamp < cfg.windowMs
+          (entry) => now - entry.timestamp < cfg.windowMs,
         ).length;
       }
     } catch {
@@ -161,8 +164,8 @@ export function getRedirectLoopInfo(config?: RedirectLoopConfig): {
     windowMs: cfg.windowMs,
     message: isLoop
       ? `Redirect loop detected: ${redirectCount} redirects in ${cfg.windowMs / 1000} seconds. ` +
-        'This may indicate a misconfiguration in the OAuth setup. ' +
-        'Check your redirect_uri and callback handler.'
+        "This may indicate a misconfiguration in the OAuth setup. " +
+        "Check your redirect_uri and callback handler."
       : `No redirect loop detected (${redirectCount}/${cfg.maxRedirects} redirects)`,
   };
 }
@@ -178,7 +181,7 @@ export interface CallbackDetectionInput {
   /** URL to check (defaults to window.location.href) */
   url?: string;
   /** HTTP method (for form_post detection) */
-  method?: 'GET' | 'POST';
+  method?: "GET" | "POST";
   /** POST body parameters (for form_post detection) */
   body?: URLSearchParams;
 }
@@ -192,7 +195,7 @@ export interface CallbackDetectionResult {
   /** Whether this is an error callback */
   isError: boolean;
   /** Detected response mode */
-  responseMode: 'query' | 'fragment' | 'form_post' | null;
+  responseMode: "query" | "fragment" | "form_post" | null;
   /** Callback parameters */
   params: URLSearchParams | null;
   /** Authorization code (if present) */
@@ -216,8 +219,11 @@ export interface CallbackDetectionResult {
  * @param input - Detection input (URL, method, body)
  * @returns Detection result
  */
-export function detectCallback(input?: CallbackDetectionInput): CallbackDetectionResult {
-  const url = input?.url ?? (typeof window !== 'undefined' ? window.location.href : '');
+export function detectCallback(
+  input?: CallbackDetectionInput,
+): CallbackDetectionResult {
+  const url =
+    input?.url ?? (typeof window !== "undefined" ? window.location.href : "");
 
   // 1. Check query string (most common for Authorization Code flow)
   try {
@@ -225,27 +231,27 @@ export function detectCallback(input?: CallbackDetectionInput): CallbackDetectio
     const queryParams = parsedUrl.searchParams;
 
     // Check for success callback (code + state)
-    if (queryParams.has('code') && queryParams.has('state')) {
+    if (queryParams.has("code") && queryParams.has("state")) {
       return {
         isCallback: true,
         isError: false,
-        responseMode: 'query',
+        responseMode: "query",
         params: queryParams,
-        code: queryParams.get('code') ?? undefined,
-        state: queryParams.get('state') ?? undefined,
+        code: queryParams.get("code") ?? undefined,
+        state: queryParams.get("state") ?? undefined,
       };
     }
 
     // Check for error callback
-    if (queryParams.has('error')) {
+    if (queryParams.has("error")) {
       return {
         isCallback: true,
         isError: true,
-        responseMode: 'query',
+        responseMode: "query",
         params: queryParams,
-        state: queryParams.get('state') ?? undefined,
-        error: queryParams.get('error') ?? undefined,
-        errorDescription: queryParams.get('error_description') ?? undefined,
+        state: queryParams.get("state") ?? undefined,
+        error: queryParams.get("error") ?? undefined,
+        errorDescription: queryParams.get("error_description") ?? undefined,
       };
     }
 
@@ -255,38 +261,39 @@ export function detectCallback(input?: CallbackDetectionInput): CallbackDetectio
       const fragmentParams = new URLSearchParams(hash);
 
       // Check for code in fragment (response_mode=fragment)
-      if (fragmentParams.has('code') && fragmentParams.has('state')) {
+      if (fragmentParams.has("code") && fragmentParams.has("state")) {
         return {
           isCallback: true,
           isError: false,
-          responseMode: 'fragment',
+          responseMode: "fragment",
           params: fragmentParams,
-          code: fragmentParams.get('code') ?? undefined,
-          state: fragmentParams.get('state') ?? undefined,
+          code: fragmentParams.get("code") ?? undefined,
+          state: fragmentParams.get("state") ?? undefined,
         };
       }
 
       // Check for access_token (Implicit flow)
-      if (fragmentParams.has('access_token')) {
+      if (fragmentParams.has("access_token")) {
         return {
           isCallback: true,
           isError: false,
-          responseMode: 'fragment',
+          responseMode: "fragment",
           params: fragmentParams,
-          state: fragmentParams.get('state') ?? undefined,
+          state: fragmentParams.get("state") ?? undefined,
         };
       }
 
       // Check for error in fragment
-      if (fragmentParams.has('error')) {
+      if (fragmentParams.has("error")) {
         return {
           isCallback: true,
           isError: true,
-          responseMode: 'fragment',
+          responseMode: "fragment",
           params: fragmentParams,
-          state: fragmentParams.get('state') ?? undefined,
-          error: fragmentParams.get('error') ?? undefined,
-          errorDescription: fragmentParams.get('error_description') ?? undefined,
+          state: fragmentParams.get("state") ?? undefined,
+          error: fragmentParams.get("error") ?? undefined,
+          errorDescription:
+            fragmentParams.get("error_description") ?? undefined,
         };
       }
     }
@@ -295,31 +302,31 @@ export function detectCallback(input?: CallbackDetectionInput): CallbackDetectio
   }
 
   // 3. Check POST body (for response_mode=form_post)
-  if (input?.method === 'POST' && input?.body) {
+  if (input?.method === "POST" && input?.body) {
     const body = input.body;
 
     // Check for success callback
-    if (body.has('code') && body.has('state')) {
+    if (body.has("code") && body.has("state")) {
       return {
         isCallback: true,
         isError: false,
-        responseMode: 'form_post',
+        responseMode: "form_post",
         params: body,
-        code: body.get('code') ?? undefined,
-        state: body.get('state') ?? undefined,
+        code: body.get("code") ?? undefined,
+        state: body.get("state") ?? undefined,
       };
     }
 
     // Check for error callback
-    if (body.has('error')) {
+    if (body.has("error")) {
       return {
         isCallback: true,
         isError: true,
-        responseMode: 'form_post',
+        responseMode: "form_post",
         params: body,
-        state: body.get('state') ?? undefined,
-        error: body.get('error') ?? undefined,
-        errorDescription: body.get('error_description') ?? undefined,
+        state: body.get("state") ?? undefined,
+        error: body.get("error") ?? undefined,
+        errorDescription: body.get("error_description") ?? undefined,
       };
     }
   }
@@ -378,13 +385,21 @@ export function getCallbackParams(url?: string): URLSearchParams | null {
  * @returns Cleaned URL
  */
 export function cleanCallbackUrl(url?: string): string {
-  const currentUrl = url ?? (typeof window !== 'undefined' ? window.location.href : '');
+  const currentUrl =
+    url ?? (typeof window !== "undefined" ? window.location.href : "");
 
   try {
     const parsedUrl = new URL(currentUrl);
 
     // Remove query parameters
-    const callbackParams = ['code', 'state', 'error', 'error_description', 'error_uri', 'session_state'];
+    const callbackParams = [
+      "code",
+      "state",
+      "error",
+      "error_description",
+      "error_uri",
+      "session_state",
+    ];
     for (const param of callbackParams) {
       parsedUrl.searchParams.delete(param);
     }
@@ -401,7 +416,7 @@ export function cleanCallbackUrl(url?: string): string {
       }
       if (hasCallbackParam) {
         const remaining = fragmentParams.toString();
-        parsedUrl.hash = remaining ? `#${remaining}` : '';
+        parsedUrl.hash = remaining ? `#${remaining}` : "";
       }
     }
 
@@ -418,14 +433,14 @@ export function cleanCallbackUrl(url?: string): string {
  * without triggering a page reload.
  */
 export function replaceUrlWithCleanVersion(): void {
-  if (typeof window === 'undefined' || typeof history === 'undefined') {
+  if (typeof window === "undefined" || typeof history === "undefined") {
     return;
   }
 
   const cleanedUrl = cleanCallbackUrl();
   if (cleanedUrl !== window.location.href) {
     try {
-      history.replaceState(history.state, '', cleanedUrl);
+      history.replaceState(history.state, "", cleanedUrl);
     } catch {
       // replaceState might fail in some contexts
     }

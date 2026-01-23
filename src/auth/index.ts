@@ -8,21 +8,24 @@ export {
   clearWindowName,
   type WindowNameMode,
   type WindowNameMeta,
-} from './window-name.js';
-export { handleSilentCallback, handlePopupCallback } from './callback-helpers.js';
+} from "./window-name.js";
+export {
+  handleSilentCallback,
+  handlePopupCallback,
+} from "./callback-helpers.js";
 export {
   IframeSilentAuth,
   type IframeSilentAuthOptions,
   type SilentAuthResult,
-} from './iframe-silent-auth.js';
-export { PopupAuth, type PopupAuthOptions } from './popup-auth.js';
+} from "./iframe-silent-auth.js";
+export { PopupAuth, type PopupAuthOptions } from "./popup-auth.js";
 export {
   SmartAuth,
   type CheckSessionResult,
   type HandoffRequest,
   type SmartAuthOptions,
   type HandoffExecuteOptions,
-} from './smart-auth.js';
+} from "./smart-auth.js";
 export {
   DeviceFlowUI,
   getDeviceFlowQRCodeUrl,
@@ -32,7 +35,7 @@ export {
   type DeviceFlowUIEvent,
   type DeviceFlowUIEventHandler,
   type DeviceFlowUIEventType,
-} from './device-flow-ui.js';
+} from "./device-flow-ui.js";
 export {
   detectCallback,
   isOAuthCallback,
@@ -48,4 +51,4 @@ export {
   type CallbackDetectionInput,
   type CallbackDetectionResult,
   type RedirectLoopConfig,
-} from './callback-detector.js';
+} from "./callback-detector.js";

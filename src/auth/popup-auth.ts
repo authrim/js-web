@@ -13,15 +13,17 @@ import type {
   AuthrimClient,
   TokenSet,
   BuildAuthorizationUrlOptions,
-} from '@authrim/core';
-import { AuthrimError } from '@authrim/core';
-import { encodeWindowName } from './window-name.js';
+} from "@authrim/core";
+import { AuthrimError } from "@authrim/core";
+import { encodeWindowName } from "./window-name.js";
 
 /**
  * Popup auth options
  */
-export interface PopupAuthOptions
-  extends Omit<BuildAuthorizationUrlOptions, 'redirectUri'> {
+export interface PopupAuthOptions extends Omit<
+  BuildAuthorizationUrlOptions,
+  "redirectUri"
+> {
   /** Popup window width (default: 500) */
   width?: number;
   /** Popup window height (default: 600) */
@@ -106,7 +108,7 @@ export class PopupAuth {
     this.pruneAttemptState();
 
     // P0: window.name に attemptId と parentOrigin を載せる（redirect_uri は固定）
-    const windowName = encodeWindowName('popup', attemptId, parentOrigin);
+    const windowName = encodeWindowName("popup", attemptId, parentOrigin);
 
     // redirect_uri は固定のまま（OAuth 厳格一致のため）
     const redirectUri =
@@ -120,7 +122,7 @@ export class PopupAuth {
     // P0: URL から state を抽出し、attemptId とマッピング（インスタンス内部のみ）
     // P1: TTL 対応で createdAt を記録
     const authUrl = new URL(url);
-    const expectedState = authUrl.searchParams.get('state');
+    const expectedState = authUrl.searchParams.get("state");
     if (expectedState) {
       this.attemptState.set(attemptId, {
         state: expectedState,
@@ -132,42 +134,44 @@ export class PopupAuth {
       const popup = window.open(
         url,
         windowName,
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
       );
 
       if (!popup || popup.closed) {
         // Emit popup blocked event
-        this.client.eventEmitter?.emit('auth:popup_blocked', {
+        this.client.eventEmitter?.emit("auth:popup_blocked", {
           url,
           timestamp: Date.now(),
-          source: 'web',
+          source: "web",
         });
 
         // Handle fallback to redirect
         if (options?.fallbackToRedirect) {
           // Emit fallback event
-          this.client.eventEmitter?.emit('auth:fallback', {
-            from: 'popup',
-            to: 'redirect',
-            reason: 'popup_blocked',
+          this.client.eventEmitter?.emit("auth:fallback", {
+            from: "popup",
+            to: "redirect",
+            reason: "popup_blocked",
             timestamp: Date.now(),
-            source: 'web',
+            source: "web",
           });
 
           // Redirect to authorization URL - use IIFE for async handling
-          const fallbackUri = options.fallbackRedirectUri ?? window.location.href;
+          const fallbackUri =
+            options.fallbackRedirectUri ?? window.location.href;
           void (async () => {
-            const { url: redirectUrl } = await this.client.buildAuthorizationUrl({
-              ...options,
-              redirectUri: fallbackUri,
-            });
+            const { url: redirectUrl } =
+              await this.client.buildAuthorizationUrl({
+                ...options,
+                redirectUri: fallbackUri,
+              });
             window.location.href = redirectUrl;
           })();
           // This promise will never resolve as we're redirecting
           return;
         }
 
-        reject(new AuthrimError('popup_blocked', 'Popup window was blocked'));
+        reject(new AuthrimError("popup_blocked", "Popup window was blocked"));
         return;
       }
 
@@ -178,7 +182,7 @@ export class PopupAuth {
       const cleanup = () => {
         if (checkInterval) clearInterval(checkInterval);
         if (timeoutId) clearTimeout(timeoutId);
-        window.removeEventListener('message', messageHandler);
+        window.removeEventListener("message", messageHandler);
         this.attemptState.delete(attemptId);
       };
 
@@ -197,7 +201,7 @@ export class PopupAuth {
         if (!sourceMatch && !nameMatch) return;
 
         // type チェック
-        if (event.data?.type !== 'authrim:popup-callback') return;
+        if (event.data?.type !== "authrim:popup-callback") return;
 
         // P0: attemptId 照合
         if (event.data?.attemptId !== attemptId) return;
@@ -212,12 +216,15 @@ export class PopupAuth {
 
         if (event.data.url && storedState) {
           try {
-            const callbackUrlObj = new URL(event.data.url, 'https://dummy.local');
-            const receivedState = callbackUrlObj.searchParams.get('state');
+            const callbackUrlObj = new URL(
+              event.data.url,
+              "https://dummy.local",
+            );
+            const receivedState = callbackUrlObj.searchParams.get("state");
             if (receivedState !== storedState) {
               cleanup();
               reject(
-                new AuthrimError('state_mismatch', 'State parameter mismatch')
+                new AuthrimError("state_mismatch", "State parameter mismatch"),
               );
               return;
             }
@@ -225,7 +232,10 @@ export class PopupAuth {
             // URL parse failure - reject with error
             cleanup();
             reject(
-              new AuthrimError('invalid_callback', 'Invalid callback URL format')
+              new AuthrimError(
+                "invalid_callback",
+                "Invalid callback URL format",
+              ),
             );
             return;
           }
@@ -236,22 +246,28 @@ export class PopupAuth {
         // URL からエラーチェック
         if (event.data.url) {
           try {
-            const callbackUrlObj = new URL(event.data.url, 'https://dummy.local');
-            const error = callbackUrlObj.searchParams.get('error');
+            const callbackUrlObj = new URL(
+              event.data.url,
+              "https://dummy.local",
+            );
+            const error = callbackUrlObj.searchParams.get("error");
             if (error) {
               const errorDescription =
-                callbackUrlObj.searchParams.get('error_description');
+                callbackUrlObj.searchParams.get("error_description");
               reject(
                 new AuthrimError(
-                  'oauth_error',
-                  errorDescription ?? 'Login failed'
-                )
+                  "oauth_error",
+                  errorDescription ?? "Login failed",
+                ),
               );
               return;
             }
           } catch {
             reject(
-              new AuthrimError('invalid_callback', 'Invalid callback URL format')
+              new AuthrimError(
+                "invalid_callback",
+                "Invalid callback URL format",
+              ),
             );
             return;
           }
@@ -265,7 +281,7 @@ export class PopupAuth {
         }
       };
 
-      window.addEventListener('message', messageHandler);
+      window.addEventListener("message", messageHandler);
 
       // ポップアップが閉じられたかチェック
       checkInterval = setInterval(() => {
@@ -274,9 +290,9 @@ export class PopupAuth {
           cleanup();
           reject(
             new AuthrimError(
-              'popup_closed',
-              'Popup was closed before completing login'
-            )
+              "popup_closed",
+              "Popup was closed before completing login",
+            ),
           );
         }
       }, 500);
@@ -289,7 +305,7 @@ export class PopupAuth {
           if (!popup.closed) {
             popup.close();
           }
-          reject(new AuthrimError('timeout_error', 'Login timed out'));
+          reject(new AuthrimError("timeout_error", "Login timed out"));
         }
       }, timeout);
     });

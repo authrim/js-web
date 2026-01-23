@@ -11,21 +11,24 @@ import type {
   EmailCodeAuth,
   SocialAuth,
   SessionAuth,
-} from '@authrim/core';
+} from "@authrim/core";
 
-import { PasskeyAuthImpl } from './passkey.js';
-import { EmailCodeAuthImpl } from './email-code.js';
-import { SocialAuthImpl } from './social.js';
-import { SessionAuthImpl } from './session.js';
-import { BrowserHttpClient } from '../providers/http.js';
-import { BrowserCryptoProvider } from '../providers/crypto.js';
-import { createBrowserStorage, type BrowserStorageOptions } from '../providers/storage.js';
+import { PasskeyAuthImpl } from "./passkey.js";
+import { EmailCodeAuthImpl } from "./email-code.js";
+import { SocialAuthImpl } from "./social.js";
+import { SessionAuthImpl } from "./session.js";
+import { BrowserHttpClient } from "../providers/http.js";
+import { BrowserCryptoProvider } from "../providers/crypto.js";
+import {
+  createBrowserStorage,
+  type BrowserStorageOptions,
+} from "../providers/storage.js";
 
 // Re-export implementations
-export { PasskeyAuthImpl, type PasskeyAuthOptions } from './passkey.js';
-export { EmailCodeAuthImpl, type EmailCodeAuthOptions } from './email-code.js';
-export { SocialAuthImpl, type SocialAuthOptions } from './social.js';
-export { SessionAuthImpl, type SessionManagerOptions } from './session.js';
+export { PasskeyAuthImpl, type PasskeyAuthOptions } from "./passkey.js";
+export { EmailCodeAuthImpl, type EmailCodeAuthOptions } from "./email-code.js";
+export { SocialAuthImpl, type SocialAuthOptions } from "./social.js";
+export { SessionAuthImpl, type SessionManagerOptions } from "./session.js";
 
 /**
  * Browser-specific Direct Auth client configuration
@@ -67,7 +70,9 @@ export interface BrowserSocialAuth extends SocialAuth {
   /** Check if current URL has callback parameters */
   hasCallbackParams(): boolean;
   /** Get supported providers */
-  getSupportedProviders(): Array<'google' | 'github' | 'apple' | 'microsoft' | 'facebook'>;
+  getSupportedProviders(): Array<
+    "google" | "github" | "apple" | "microsoft" | "facebook"
+  >;
 }
 
 /**
@@ -75,9 +80,9 @@ export interface BrowserSocialAuth extends SocialAuth {
  */
 export interface BrowserSessionAuth extends SessionAuth {
   /** Get current user */
-  getUser(): Promise<import('@authrim/core').User | null>;
+  getUser(): Promise<import("@authrim/core").User | null>;
   /** Refresh session */
-  refresh(): Promise<import('@authrim/core').Session | null>;
+  refresh(): Promise<import("@authrim/core").Session | null>;
   /** Check if user is authenticated */
   isAuthenticated(): Promise<boolean>;
   /** Clear session cache */
@@ -124,7 +129,7 @@ export interface BrowserDirectAuthClient extends DirectAuthClient {
  * ```
  */
 export function createDirectAuthClient(
-  config: BrowserDirectAuthConfig
+  config: BrowserDirectAuthConfig,
 ): BrowserDirectAuthClient {
   // Initialize providers
   const http = new BrowserHttpClient();
@@ -206,4 +211,4 @@ export type {
   SocialAuth,
   SessionAuth,
   DirectAuthClient,
-} from '@authrim/core';
+} from "@authrim/core";

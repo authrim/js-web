@@ -377,6 +377,81 @@ const { data, error } = await auth.oauth.popup.login({
 
 ---
 
+### Silent SSO (Cross-Domain)
+
+Safari ITP や Chrome Third-Party Cookie Phaseout に対応した クロスドメイン SSO を実行できます。
+iframe ベースの silent auth は Cookie がブロックされる環境では動作しないため、トップレベル遷移（`prompt=none`）を使用します。
+
+```typescript
+const auth = await createAuthrim({
+  issuer: 'https://auth.example.com',
+  clientId: 'your-client-id',
+  enableOAuth: true,
+});
+
+// 1. トップページで SSO 試行（初回のみ）
+if (!(await auth.session.isAuthenticated())) {
+  const ssoAttempted = sessionStorage.getItem('sso_attempted');
+  if (!ssoAttempted) {
+    sessionStorage.setItem('sso_attempted', 'true');
+
+    // トップレベル遷移で IdP へ prompt=none リダイレクト
+    // - IdP にセッションあり → SSO 成功 → コールバック → 元のページへ
+    // - IdP にセッションなし → sso_error=login_required で戻る
+    await auth.oauth.trySilentLogin({
+      onLoginRequired: 'return',  // 未ログインなら元のページへ戻る
+      returnTo: window.location.href,
+    });
+    return; // リダイレクトするのでここには到達しない
+  }
+
+  // SSO 試行済みだがログインなし → ログインボタン表示
+  showLoginButton();
+}
+```
+
+**callback.html で必ず `handleSilentCallback()` を呼ぶ:**
+
+```typescript
+// callback.html または callback.ts
+const auth = await createAuthrim({
+  issuer: 'https://auth.example.com',
+  clientId: 'your-client-id',
+  enableOAuth: true,
+});
+
+// Silent Login のコールバック処理（重要！）
+const result = await auth.oauth.handleSilentCallback();
+
+if (result.status === 'error' && result.error === 'not_silent_login') {
+  // Silent Login ではない → 通常の OAuth コールバック処理へ
+  if (auth.social.hasCallbackParams()) {
+    const { data, error } = await auth.social.handleCallback();
+    // ...
+  }
+}
+```
+
+**TrySilentLoginOptions:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `onLoginRequired` | `'return' \| 'login'` | `'return'` | IdP にセッションがない場合の動作 |
+| `returnTo` | `string` | 現在のURL | 成功時・return時の戻り先URL |
+| `scope` | `string` | - | 追加の OAuth スコープ |
+
+**SilentLoginResult:**
+
+| Status | Description |
+|--------|-------------|
+| `success` | SSO 成功、セッション確立済み |
+| `login_required` | IdP にセッションなし（return 選択時） |
+| `error` | その他のエラー（error, errorDescription を参照） |
+
+> ⚠️ **重要**: `handleSilentCallback()` を呼ばないと Silent SSO が正しく動作しません。
+
+---
+
 ### CheckSessionIframeManager
 
 Manages OP's check_session_iframe for session state monitoring per OIDC Session Management 1.0.

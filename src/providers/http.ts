@@ -7,8 +7,8 @@
  * P0: 機密データ（code_verifier, token 等）のログ出力をマスキング
  */
 
-import type { HttpClient, HttpOptions, HttpResponse } from '@authrim/core';
-import { sanitizeJsonForLogging } from '../utils/sensitive-data.js';
+import type { HttpClient, HttpOptions, HttpResponse } from "@authrim/core";
+import { sanitizeJsonForLogging } from "../utils/sensitive-data.js";
 
 /**
  * Browser HTTP client options
@@ -51,7 +51,7 @@ export class BrowserHttpClient implements HttpClient {
 
   constructor(options?: BrowserHttpClientOptions) {
     // P0: デフォルトは 'omit' - 必要な時だけ 'include' を明示指定
-    this.defaultCredentials = options?.credentials ?? 'omit';
+    this.defaultCredentials = options?.credentials ?? "omit";
     this.defaultTimeout = options?.timeout ?? 30000;
     this.debug = options?.debug ?? false;
   }
@@ -65,7 +65,7 @@ export class BrowserHttpClient implements HttpClient {
 
     if (data) {
       const sanitized =
-        typeof data === 'string'
+        typeof data === "string"
           ? sanitizeJsonForLogging(data)
           : JSON.stringify(data);
       // eslint-disable-next-line no-console
@@ -78,7 +78,7 @@ export class BrowserHttpClient implements HttpClient {
 
   async fetch<T = unknown>(
     url: string,
-    options?: BrowserHttpOptions
+    options?: BrowserHttpOptions,
   ): Promise<HttpResponse<T>> {
     const controller = new AbortController();
     const timeout = options?.timeout ?? this.defaultTimeout;
@@ -86,11 +86,11 @@ export class BrowserHttpClient implements HttpClient {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     // P0: デバッグログ出力（機密データはマスキング）
-    this.debugLog(`${options?.method ?? 'GET'} ${url}`, options?.body);
+    this.debugLog(`${options?.method ?? "GET"} ${url}`, options?.body);
 
     try {
       const response = await globalThis.fetch(url, {
-        method: options?.method ?? 'GET',
+        method: options?.method ?? "GET",
         headers: options?.headers,
         body: options?.body,
         signal: options?.signal ?? controller.signal,
@@ -98,10 +98,10 @@ export class BrowserHttpClient implements HttpClient {
         credentials: options?.credentials ?? this.defaultCredentials,
       });
 
-      const contentType = response.headers.get('content-type') ?? '';
+      const contentType = response.headers.get("content-type") ?? "";
       let data: T;
 
-      if (contentType.includes('application/json')) {
+      if (contentType.includes("application/json")) {
         data = (await response.json()) as T;
       } else {
         data = (await response.text()) as T;

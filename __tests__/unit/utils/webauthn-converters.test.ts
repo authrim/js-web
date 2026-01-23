@@ -128,66 +128,89 @@ describe('webauthn-converters', () => {
   describe('assertionResponseToJSON', () => {
     it('should convert assertion response to JSON', () => {
       const mockCredential = {
+        rawId: new Uint8Array([20, 21, 22, 23]).buffer,
         response: {
           clientDataJSON: new Uint8Array([1, 2, 3, 4]).buffer,
           authenticatorData: new Uint8Array([5, 6, 7, 8]).buffer,
           signature: new Uint8Array([9, 10, 11, 12]).buffer,
           userHandle: new Uint8Array([13, 14, 15, 16]).buffer,
         },
+        getClientExtensionResults: () => ({}),
+        authenticatorAttachment: 'platform',
       } as unknown as PublicKeyCredential;
 
       const result = assertionResponseToJSON(mockCredential);
 
-      expect(result.clientDataJSON).toBe('AQIDBA');
-      expect(result.authenticatorData).toBe('BQYHCA');
-      expect(result.signature).toBe('CQoLDA');
-      expect(result.userHandle).toBe('DQ4PEA');
+      expect(result.id).toBe('FBUWFw');
+      expect(result.rawId).toBe('FBUWFw');
+      expect(result.response.clientDataJSON).toBe('AQIDBA');
+      expect(result.response.authenticatorData).toBe('BQYHCA');
+      expect(result.response.signature).toBe('CQoLDA');
+      expect(result.response.userHandle).toBe('DQ4PEA');
+      expect(result.type).toBe('public-key');
+      expect(result.clientExtensionResults).toEqual({});
+      expect(result.authenticatorAttachment).toBe('platform');
     });
 
     it('should handle null userHandle', () => {
       const mockCredential = {
+        rawId: new Uint8Array([20, 21, 22, 23]).buffer,
         response: {
           clientDataJSON: new Uint8Array([1, 2, 3, 4]).buffer,
           authenticatorData: new Uint8Array([5, 6, 7, 8]).buffer,
           signature: new Uint8Array([9, 10, 11, 12]).buffer,
           userHandle: null,
         },
+        getClientExtensionResults: () => ({}),
+        authenticatorAttachment: null,
       } as unknown as PublicKeyCredential;
 
       const result = assertionResponseToJSON(mockCredential);
 
-      expect(result.userHandle).toBeUndefined();
+      expect(result.response.userHandle).toBeUndefined();
     });
   });
 
   describe('attestationResponseToJSON', () => {
     it('should convert attestation response to JSON', () => {
       const mockCredential = {
+        rawId: new Uint8Array([10, 11, 12, 13]).buffer,
         response: {
           clientDataJSON: new Uint8Array([1, 2, 3, 4]).buffer,
           attestationObject: new Uint8Array([5, 6, 7, 8]).buffer,
           getTransports: () => ['internal', 'hybrid'],
         },
+        getClientExtensionResults: () => ({ credProps: { rk: true } }),
+        authenticatorAttachment: 'platform',
       } as unknown as PublicKeyCredential;
 
       const result = attestationResponseToJSON(mockCredential);
 
-      expect(result.clientDataJSON).toBe('AQIDBA');
-      expect(result.attestationObject).toBe('BQYHCA');
-      expect(result.transports).toEqual(['internal', 'hybrid']);
+      expect(result.id).toBe('CgsMDQ');
+      expect(result.rawId).toBe('CgsMDQ');
+      expect(result.response.clientDataJSON).toBe('AQIDBA');
+      expect(result.response.attestationObject).toBe('BQYHCA');
+      expect(result.response.transports).toEqual(['internal', 'hybrid']);
+      expect(result.type).toBe('public-key');
+      expect(result.clientExtensionResults).toEqual({ credProps: { rk: true } });
+      expect(result.authenticatorAttachment).toBe('platform');
     });
 
     it('should handle missing getTransports method', () => {
       const mockCredential = {
+        rawId: new Uint8Array([10, 11, 12, 13]).buffer,
         response: {
           clientDataJSON: new Uint8Array([1, 2, 3, 4]).buffer,
           attestationObject: new Uint8Array([5, 6, 7, 8]).buffer,
         },
+        getClientExtensionResults: () => ({}),
+        authenticatorAttachment: null,
       } as unknown as PublicKeyCredential;
 
       const result = attestationResponseToJSON(mockCredential);
 
-      expect(result.transports).toBeUndefined();
+      expect(result.response.transports).toBeUndefined();
+      expect(result.clientExtensionResults).toEqual({});
     });
   });
 });

@@ -18,7 +18,7 @@ import type {
   SocialLoginOptions,
   DirectAuthLogoutOptions,
   NextAction,
-} from '@authrim/core';
+} from "@authrim/core";
 
 // =============================================================================
 // Configuration Types
@@ -27,7 +27,7 @@ import type {
 /**
  * Storage type options
  */
-export type StorageType = 'memory' | 'sessionStorage' | 'localStorage';
+export type StorageType = "memory" | "sessionStorage" | "localStorage";
 
 /**
  * Storage options
@@ -66,6 +66,14 @@ export interface AuthrimConfig {
    * Persistence: 'localStorage' (requires XSS protection)
    */
   storage?: StorageOptions;
+  /**
+   * Redirect URI for silent login (cross-domain SSO)
+   *
+   * Default: `${window.location.origin}/callback.html`
+   *
+   * This should be a page that calls `auth.oauth.handleSilentCallback()`
+   */
+  silentLoginRedirectUri?: string;
 }
 
 // =============================================================================
@@ -87,7 +95,7 @@ export interface AuthError {
   /** Whether the operation can be retried */
   retryable: boolean;
   /** Error severity level */
-  severity: 'info' | 'warn' | 'error' | 'critical';
+  severity: "info" | "warn" | "error" | "critical";
   /** Internal debugging info (not for public API) */
   cause?: unknown;
 }
@@ -126,30 +134,34 @@ export interface AuthSessionData {
  * Auth event names with prefix convention
  */
 export type AuthEventName =
-  | 'session:changed'
-  | 'session:expired'
-  | 'auth:login'
-  | 'auth:logout'
-  | 'auth:error'
-  | 'token:refreshed';
+  | "session:changed"
+  | "session:expired"
+  | "auth:login"
+  | "auth:logout"
+  | "auth:error"
+  | "token:refreshed";
 
 /**
  * Event payloads for each event type
  */
 export interface AuthEventPayloads {
-  'session:changed': { session: Session | null; user: User | null };
-  'session:expired': { reason: 'timeout' | 'revoked' | 'logout' };
-  'auth:login': { session: Session; user: User; method: 'passkey' | 'emailCode' | 'social' };
-  'auth:logout': { redirectUri?: string };
-  'auth:error': { error: AuthError };
-  'token:refreshed': { session: Session };
+  "session:changed": { session: Session | null; user: User | null };
+  "session:expired": { reason: "timeout" | "revoked" | "logout" };
+  "auth:login": {
+    session: Session;
+    user: User;
+    method: "passkey" | "emailCode" | "social";
+  };
+  "auth:logout": { redirectUri?: string };
+  "auth:error": { error: AuthError };
+  "token:refreshed": { session: Session };
 }
 
 /**
  * Event handler type
  */
 export type AuthEventHandler<E extends AuthEventName> = (
-  payload: AuthEventPayloads[E]
+  payload: AuthEventPayloads[E],
 ) => void;
 
 // =============================================================================
@@ -165,7 +177,9 @@ export interface PasskeyNamespace {
   /** Sign up with Passkey (create account + register Passkey) */
   signUp(options: PasskeySignUpOptions): Promise<AuthResponse<AuthSessionData>>;
   /** Register a Passkey to existing account (requires authentication) */
-  register(options?: PasskeyRegisterOptions): Promise<AuthResponse<PasskeyCredential>>;
+  register(
+    options?: PasskeyRegisterOptions,
+  ): Promise<AuthResponse<PasskeyCredential>>;
   /** Check if WebAuthn is supported */
   isSupported(): boolean;
   /** Check if conditional UI (autofill) is available */
@@ -179,9 +193,16 @@ export interface PasskeyNamespace {
  */
 export interface EmailCodeNamespace {
   /** Send verification code to email */
-  send(email: string, options?: EmailCodeSendOptions): Promise<AuthResponse<EmailCodeSendResult>>;
+  send(
+    email: string,
+    options?: EmailCodeSendOptions,
+  ): Promise<AuthResponse<EmailCodeSendResult>>;
   /** Verify code and authenticate */
-  verify(email: string, code: string, options?: EmailCodeVerifyOptions): Promise<AuthResponse<AuthSessionData>>;
+  verify(
+    email: string,
+    code: string,
+    options?: EmailCodeVerifyOptions,
+  ): Promise<AuthResponse<AuthSessionData>>;
   /** Check if there's a pending verification for an email */
   hasPendingVerification(email: string): boolean;
   /** Get remaining time for pending verification (in seconds) */
@@ -195,9 +216,15 @@ export interface EmailCodeNamespace {
  */
 export interface SocialNamespace {
   /** Login with social provider (popup) */
-  loginWithPopup(provider: SocialProvider, options?: SocialLoginOptions): Promise<AuthResponse<AuthSessionData>>;
+  loginWithPopup(
+    provider: SocialProvider,
+    options?: SocialLoginOptions,
+  ): Promise<AuthResponse<AuthSessionData>>;
   /** Login with social provider (redirect) */
-  loginWithRedirect(provider: SocialProvider, options?: SocialLoginOptions): Promise<void>;
+  loginWithRedirect(
+    provider: SocialProvider,
+    options?: SocialLoginOptions,
+  ): Promise<void>;
   /** Handle callback from social provider (uses window.location.search) */
   handleCallback(): Promise<AuthResponse<AuthSessionData>>;
   /** Check if current URL has callback parameters */
@@ -241,7 +268,7 @@ export interface OAuthBuildAuthorizationUrlOptions {
   scopes?: string[];
   state?: string;
   nonce?: string;
-  prompt?: 'none' | 'login' | 'consent' | 'select_account';
+  prompt?: "none" | "login" | "consent" | "select_account";
   loginHint?: string;
 }
 
@@ -288,21 +315,84 @@ export interface OAuthTokenSet {
 }
 
 /**
+ * Silent Login options for cross-domain SSO
+ *
+ * Works with Safari ITP and Chrome Third-Party Cookie Phaseout
+ * by using top-level navigation instead of iframes.
+ */
+export interface TrySilentLoginOptions {
+  /**
+   * Behavior when IdP has no session (login_required error)
+   *
+   * - 'return': Return to original page (show login button, etc.)
+   * - 'login': Show login screen for user authentication
+   *
+   * Default: 'return'
+   */
+  onLoginRequired?: "return" | "login";
+
+  /**
+   * Return URL (used for both success and return scenarios)
+   * Default: current URL
+   */
+  returnTo?: string;
+
+  /**
+   * OAuth scopes (if additional scopes are needed)
+   */
+  scope?: string;
+}
+
+/**
+ * Silent Login result (used in callback page)
+ */
+export type SilentLoginResult =
+  | { status: "success" }
+  | { status: "login_required" }
+  | { status: "error"; error: string; errorDescription?: string };
+
+/**
  * OAuth namespace (only available when enableOAuth: true)
  */
 export interface OAuthNamespace {
   /** Build OAuth authorization URL */
-  buildAuthorizationUrl(options: OAuthBuildAuthorizationUrlOptions): Promise<OAuthAuthorizationUrlResult>;
+  buildAuthorizationUrl(
+    options: OAuthBuildAuthorizationUrlOptions,
+  ): Promise<OAuthAuthorizationUrlResult>;
   /** Handle OAuth callback (explicit URL parameter) */
   handleCallback(url: string): Promise<AuthResponse<OAuthTokenSet>>;
   /** Silent authentication */
   silentAuth: {
-    check(options: OAuthSilentAuthOptions): Promise<AuthResponse<OAuthTokenSet>>;
+    check(
+      options: OAuthSilentAuthOptions,
+    ): Promise<AuthResponse<OAuthTokenSet>>;
   };
   /** Popup authentication */
   popup: {
-    login(options?: OAuthPopupLoginOptions): Promise<AuthResponse<OAuthTokenSet>>;
+    login(
+      options?: OAuthPopupLoginOptions,
+    ): Promise<AuthResponse<OAuthTokenSet>>;
   };
+
+  /**
+   * Try silent SSO via top-level navigation (prompt=none)
+   *
+   * This function redirects to IdP and does not return.
+   * Works with Safari ITP and Chrome Third-Party Cookie Phaseout.
+   *
+   * @returns Promise<never> - This function redirects and never returns
+   */
+  trySilentLogin(options?: TrySilentLoginOptions): Promise<never>;
+
+  /**
+   * Handle silent login callback
+   *
+   * Call this in your callback page. It handles both silent login
+   * results and regular OAuth callbacks.
+   *
+   * @returns SilentLoginResult indicating the outcome
+   */
+  handleSilentCallback(): Promise<SilentLoginResult>;
 }
 
 // =============================================================================
@@ -314,9 +404,14 @@ export interface OAuthNamespace {
  */
 export interface SignInShortcuts {
   /** Sign in with Passkey */
-  passkey(options?: PasskeyLoginOptions): Promise<AuthResponse<AuthSessionData>>;
+  passkey(
+    options?: PasskeyLoginOptions,
+  ): Promise<AuthResponse<AuthSessionData>>;
   /** Sign in with social provider (popup) */
-  social(provider: SocialProvider, options?: SocialLoginOptions): Promise<AuthResponse<AuthSessionData>>;
+  social(
+    provider: SocialProvider,
+    options?: SocialLoginOptions,
+  ): Promise<AuthResponse<AuthSessionData>>;
 }
 
 /**
@@ -324,7 +419,9 @@ export interface SignInShortcuts {
  */
 export interface SignUpShortcuts {
   /** Sign up with Passkey */
-  passkey(options: PasskeySignUpOptions): Promise<AuthResponse<AuthSessionData>>;
+  passkey(
+    options: PasskeySignUpOptions,
+  ): Promise<AuthResponse<AuthSessionData>>;
 }
 
 // =============================================================================
@@ -349,7 +446,10 @@ export interface AuthrimBase {
   signOut(options?: SignOutOptions): Promise<void>;
 
   // Event system
-  on<E extends AuthEventName>(event: E, handler: AuthEventHandler<E>): () => void;
+  on<E extends AuthEventName>(
+    event: E,
+    handler: AuthEventHandler<E>,
+  ): () => void;
 }
 
 /**
@@ -366,7 +466,7 @@ export interface AuthrimWithOAuth extends AuthrimBase {
  * When enableOAuth is false or undefined, oauth is undefined
  */
 export type Authrim<T extends AuthrimConfig = AuthrimConfig> =
-  T['enableOAuth'] extends true
+  T["enableOAuth"] extends true
     ? AuthrimWithOAuth
     : AuthrimBase & { oauth?: undefined };
 
@@ -388,4 +488,4 @@ export type {
   SocialLoginOptions,
   DirectAuthLogoutOptions,
   NextAction,
-} from '@authrim/core';
+} from "@authrim/core";

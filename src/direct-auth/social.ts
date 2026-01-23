@@ -18,17 +18,17 @@ import {
   type AuthResult,
   type Session,
   type User,
-} from '@authrim/core';
-import { getAuthrimCode, mapSeverity } from '../utils/error-mapping.js';
+} from "@authrim/core";
+import { getAuthrimCode, mapSeverity } from "../utils/error-mapping.js";
 
 /**
  * Storage keys for social login state
  */
 const STORAGE_KEYS = {
-  STATE: 'authrim:direct:social:state',
-  CODE_VERIFIER: 'authrim:direct:social:code_verifier',
-  PROVIDER: 'authrim:direct:social:provider',
-  REDIRECT_URI: 'authrim:direct:social:redirect_uri',
+  STATE: "authrim:direct:social:state",
+  CODE_VERIFIER: "authrim:direct:social:code_verifier",
+  PROVIDER: "authrim:direct:social:provider",
+  REDIRECT_URI: "authrim:direct:social:redirect_uri",
 };
 
 /**
@@ -44,7 +44,10 @@ export interface SocialAuthOptions {
   /** Storage for state management */
   storage: AuthrimStorage;
   /** Token exchange callback */
-  exchangeToken: (authCode: string, codeVerifier: string) => Promise<{
+  exchangeToken: (
+    authCode: string,
+    codeVerifier: string,
+  ) => Promise<{
     session?: Session;
     user?: User;
   }>;
@@ -68,7 +71,7 @@ export class SocialAuthImpl implements SocialAuth {
   private readonly clientId: string;
   private readonly pkce: PKCEHelper;
   private readonly storage: AuthrimStorage;
-  private readonly exchangeToken: SocialAuthOptions['exchangeToken'];
+  private readonly exchangeToken: SocialAuthOptions["exchangeToken"];
 
   // Popup state
   private popupWindow: Window | null = null;
@@ -83,8 +86,8 @@ export class SocialAuthImpl implements SocialAuth {
     this.exchangeToken = options.exchangeToken;
 
     // Listen for popup callback messages
-    if (typeof window !== 'undefined') {
-      window.addEventListener('message', this.handlePopupMessage.bind(this));
+    if (typeof window !== "undefined") {
+      window.addEventListener("message", this.handlePopupMessage.bind(this));
     }
   }
 
@@ -93,7 +96,7 @@ export class SocialAuthImpl implements SocialAuth {
    */
   async loginWithPopup(
     provider: SocialProvider,
-    options?: SocialLoginOptions
+    options?: SocialLoginOptions,
   ): Promise<AuthResult> {
     // Generate PKCE pair and state
     const { codeVerifier, codeChallenge } = await this.pkce.generatePKCE();
@@ -113,20 +116,21 @@ export class SocialAuthImpl implements SocialAuth {
     const popupFeatures = this.getPopupFeatures(options?.popupFeatures);
     const popup = window.open(
       authUrl,
-      'authrim_social_popup',
-      this.buildPopupFeaturesString(popupFeatures)
+      "authrim_social_popup",
+      this.buildPopupFeaturesString(popupFeatures),
     );
 
     if (!popup) {
       return {
         success: false,
         error: {
-          error: 'popup_blocked',
-          error_description: 'Popup was blocked by the browser. Please allow popups and try again.',
-          code: 'AR004001',
+          error: "popup_blocked",
+          error_description:
+            "Popup was blocked by the browser. Please allow popups and try again.",
+          code: "AR004001",
           meta: {
             retryable: false,
-            severity: 'warn',
+            severity: "warn",
           },
         },
       };
@@ -151,12 +155,13 @@ export class SocialAuthImpl implements SocialAuth {
           resolve({
             success: false,
             error: {
-              error: 'popup_closed',
-              error_description: 'The login popup was closed before completing authentication.',
-              code: 'AR004002',
+              error: "popup_closed",
+              error_description:
+                "The login popup was closed before completing authentication.",
+              code: "AR004002",
               meta: {
                 retryable: false,
-                severity: 'warn',
+                severity: "warn",
               },
             },
           });
@@ -170,14 +175,15 @@ export class SocialAuthImpl implements SocialAuth {
    */
   async loginWithRedirect(
     provider: SocialProvider,
-    options?: SocialLoginOptions
+    options?: SocialLoginOptions,
   ): Promise<void> {
     // Generate PKCE pair and state
     const { codeVerifier, codeChallenge } = await this.pkce.generatePKCE();
     const state = await this.generateState();
 
     // Get redirect URI
-    const redirectUri = options?.redirectUri || window.location.href.split('?')[0];
+    const redirectUri =
+      options?.redirectUri || window.location.href.split("?")[0];
 
     // Store state for callback verification
     await this.storage.set(STORAGE_KEYS.STATE, state);
@@ -204,10 +210,10 @@ export class SocialAuthImpl implements SocialAuth {
   async handleCallback(): Promise<AuthResult> {
     // Parse URL parameters
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    const error = params.get('error');
-    const errorDescription = params.get('error_description');
+    const code = params.get("code");
+    const state = params.get("state");
+    const error = params.get("error");
+    const errorDescription = params.get("error_description");
 
     // Check for errors
     if (error) {
@@ -216,11 +222,11 @@ export class SocialAuthImpl implements SocialAuth {
         success: false,
         error: {
           error: error,
-          error_description: errorDescription || 'Authentication failed',
-          code: 'AR004003',
+          error_description: errorDescription || "Authentication failed",
+          code: "AR004003",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       };
@@ -232,12 +238,12 @@ export class SocialAuthImpl implements SocialAuth {
       return {
         success: false,
         error: {
-          error: 'invalid_response',
-          error_description: 'Missing authorization code or state parameter',
-          code: 'AR004004',
+          error: "invalid_response",
+          error_description: "Missing authorization code or state parameter",
+          code: "AR004004",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       };
@@ -253,12 +259,12 @@ export class SocialAuthImpl implements SocialAuth {
       return {
         success: false,
         error: {
-          error: 'state_mismatch',
-          error_description: 'State parameter mismatch. Please try again.',
-          code: 'AR004005',
+          error: "state_mismatch",
+          error_description: "State parameter mismatch. Please try again.",
+          code: "AR004005",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       };
@@ -269,12 +275,12 @@ export class SocialAuthImpl implements SocialAuth {
       return {
         success: false,
         error: {
-          error: 'invalid_state',
-          error_description: 'No code verifier found. Please try again.',
-          code: 'AR004006',
+          error: "invalid_state",
+          error_description: "No code verifier found. Please try again.",
+          code: "AR004006",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       };
@@ -304,7 +310,7 @@ export class SocialAuthImpl implements SocialAuth {
           error: {
             error: error.code,
             error_description: error.message,
-            code: getAuthrimCode(error.code, 'AR004000'),
+            code: getAuthrimCode(error.code, "AR004000"),
             meta: {
               retryable: error.meta.retryable,
               severity: mapSeverity(error.meta.severity),
@@ -316,12 +322,13 @@ export class SocialAuthImpl implements SocialAuth {
       return {
         success: false,
         error: {
-          error: 'token_error',
-          error_description: error instanceof Error ? error.message : 'Failed to exchange token',
-          code: 'AR004007',
+          error: "token_error",
+          error_description:
+            error instanceof Error ? error.message : "Failed to exchange token",
+          code: "AR004007",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       };
@@ -333,14 +340,14 @@ export class SocialAuthImpl implements SocialAuth {
    */
   hasCallbackParams(): boolean {
     const params = new URLSearchParams(window.location.search);
-    return params.has('code') || params.has('error');
+    return params.has("code") || params.has("error");
   }
 
   /**
    * Get supported providers
    */
   getSupportedProviders(): SocialProvider[] {
-    return ['google', 'github', 'apple', 'microsoft', 'facebook'];
+    return ["google", "github", "apple", "microsoft", "facebook"];
   }
 
   // ==========================================================================
@@ -353,7 +360,7 @@ export class SocialAuthImpl implements SocialAuth {
   private async generateState(): Promise<string> {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   }
 
   /**
@@ -367,24 +374,24 @@ export class SocialAuthImpl implements SocialAuth {
       redirectUri: string;
       scopes?: string[];
       loginHint?: string;
-    }
+    },
   ): string {
     const params = new URLSearchParams({
-      response_type: 'code',
+      response_type: "code",
       client_id: this.clientId,
       redirect_uri: options.redirectUri,
       state: options.state,
       code_challenge: options.codeChallenge,
-      code_challenge_method: 'S256',
+      code_challenge_method: "S256",
       provider,
     });
 
     if (options.scopes && options.scopes.length > 0) {
-      params.set('scope', options.scopes.join(' '));
+      params.set("scope", options.scopes.join(" "));
     }
 
     if (options.loginHint) {
-      params.set('login_hint', options.loginHint);
+      params.set("login_hint", options.loginHint);
     }
 
     return `${this.issuer}/api/v1/auth/authorize?${params.toString()}`;
@@ -401,7 +408,10 @@ export class SocialAuthImpl implements SocialAuth {
   /**
    * Get popup window features
    */
-  private getPopupFeatures(options?: { width?: number; height?: number }): PopupFeatures {
+  private getPopupFeatures(options?: {
+    width?: number;
+    height?: number;
+  }): PopupFeatures {
     const width = options?.width || 500;
     const height = options?.height || 600;
     const left = Math.max(0, (window.screen.width - width) / 2);
@@ -419,13 +429,13 @@ export class SocialAuthImpl implements SocialAuth {
       `height=${features.height}`,
       `left=${features.left}`,
       `top=${features.top}`,
-      'scrollbars=yes',
-      'resizable=yes',
-      'status=no',
-      'menubar=no',
-      'toolbar=no',
-      'location=yes',
-    ].join(',');
+      "scrollbars=yes",
+      "resizable=yes",
+      "status=no",
+      "menubar=no",
+      "toolbar=no",
+      "location=yes",
+    ].join(",");
   }
 
   /**
@@ -446,7 +456,7 @@ export class SocialAuthImpl implements SocialAuth {
       error_description?: string;
     };
 
-    if (data.type !== 'authrim:social:callback') {
+    if (data.type !== "authrim:social:callback") {
       return;
     }
 
@@ -465,11 +475,11 @@ export class SocialAuthImpl implements SocialAuth {
         success: false,
         error: {
           error: data.error,
-          error_description: data.error_description || 'Authentication failed',
-          code: 'AR004003',
+          error_description: data.error_description || "Authentication failed",
+          code: "AR004003",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       });
@@ -481,12 +491,12 @@ export class SocialAuthImpl implements SocialAuth {
       resolve({
         success: false,
         error: {
-          error: 'invalid_response',
-          error_description: 'Missing authorization code or state',
-          code: 'AR004004',
+          error: "invalid_response",
+          error_description: "Missing authorization code or state",
+          code: "AR004004",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       });
@@ -502,12 +512,12 @@ export class SocialAuthImpl implements SocialAuth {
       resolve({
         success: false,
         error: {
-          error: 'state_mismatch',
-          error_description: 'State parameter mismatch',
-          code: 'AR004005',
+          error: "state_mismatch",
+          error_description: "State parameter mismatch",
+          code: "AR004005",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       });
@@ -519,12 +529,12 @@ export class SocialAuthImpl implements SocialAuth {
       resolve({
         success: false,
         error: {
-          error: 'invalid_state',
-          error_description: 'No code verifier found',
-          code: 'AR004006',
+          error: "invalid_state",
+          error_description: "No code verifier found",
+          code: "AR004006",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       });
@@ -534,7 +544,10 @@ export class SocialAuthImpl implements SocialAuth {
 
     try {
       // Exchange code for session
-      const { session, user } = await this.exchangeToken(data.code, codeVerifier);
+      const { session, user } = await this.exchangeToken(
+        data.code,
+        codeVerifier,
+      );
 
       await this.clearStoredState();
 
@@ -549,12 +562,13 @@ export class SocialAuthImpl implements SocialAuth {
       resolve({
         success: false,
         error: {
-          error: 'token_error',
-          error_description: error instanceof Error ? error.message : 'Failed to exchange token',
-          code: 'AR004007',
+          error: "token_error",
+          error_description:
+            error instanceof Error ? error.message : "Failed to exchange token",
+          code: "AR004007",
           meta: {
             retryable: false,
-            severity: 'error',
+            severity: "error",
           },
         },
       });
@@ -592,10 +606,10 @@ export class SocialAuthImpl implements SocialAuth {
    */
   private clearUrlParams(): void {
     const url = new URL(window.location.href);
-    url.searchParams.delete('code');
-    url.searchParams.delete('state');
-    url.searchParams.delete('error');
-    url.searchParams.delete('error_description');
-    window.history.replaceState({}, '', url.toString());
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_description");
+    window.history.replaceState({}, "", url.toString());
   }
 }

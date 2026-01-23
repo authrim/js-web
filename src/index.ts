@@ -15,7 +15,7 @@
 // Main Entry Point
 // =============================================================================
 
-export { createAuthrim } from './authrim.js';
+export { createAuthrim } from "./authrim.js";
 
 // =============================================================================
 // Type Definitions
@@ -53,6 +53,10 @@ export type {
   OAuthPopupLoginOptions,
   OAuthTokenSet,
 
+  // Silent Login (Cross-Domain SSO)
+  TrySilentLoginOptions,
+  SilentLoginResult,
+
   // Events
   AuthEventName,
   AuthEventHandler,
@@ -60,7 +64,7 @@ export type {
 
   // Options
   SignOutOptions,
-} from './types.js';
+} from "./types.js";
 
 // Re-export commonly used types from @authrim/core
 export type {
@@ -86,7 +90,7 @@ export type {
 
   // Session
   DirectAuthLogoutOptions,
-} from './types.js';
+} from "./types.js";
 
 // =============================================================================
 // Response Utilities (for advanced use cases)
@@ -97,7 +101,7 @@ export {
   failure,
   failureFromParams,
   authResultToResponse,
-} from './response.js';
+} from "./response.js";
 
 // =============================================================================
 // Session Management
@@ -107,7 +111,7 @@ export {
   CheckSessionIframeManager,
   type CheckSessionIframeManagerOptions,
   type CheckSessionResult,
-} from './session/check-session-iframe.js';
+} from "./session/check-session-iframe.js";
 export {
   SessionMonitor,
   type SessionMonitorOptions,
@@ -115,12 +119,12 @@ export {
   type SessionMonitorEventHandler,
   type SessionMonitorEventType,
   type SessionStoppedReason,
-} from './session/session-monitor.js';
+} from "./session/session-monitor.js";
 export {
   FrontChannelLogoutHandler,
   type FrontChannelLogoutHandlerOptions,
   type FrontChannelLogoutHandleResult,
-} from './session/front-channel-logout-handler.js';
+} from "./session/front-channel-logout-handler.js";
 
 // =============================================================================
 // Device Flow UI
@@ -135,7 +139,7 @@ export {
   type DeviceFlowUIEvent,
   type DeviceFlowUIEventHandler,
   type DeviceFlowUIEventType,
-} from './auth/device-flow-ui.js';
+} from "./auth/device-flow-ui.js";
 
 // =============================================================================
 // Tab Sync (cross-tab session synchronization)
@@ -146,7 +150,7 @@ export {
   type TabSyncConfig,
   type TabSyncMessage,
   type TabSyncMessageType,
-} from './session/tab-sync.js';
+} from "./session/tab-sync.js";
 
 // =============================================================================
 // State Machine (reactive state management)
@@ -156,7 +160,7 @@ export {
   AuthStateMachine,
   type AuthStateMachineConfig,
   type StateChangeListener,
-} from './state/auth-state-machine.js';
+} from "./state/auth-state-machine.js";
 
 // =============================================================================
 // Callback Detection
@@ -177,7 +181,7 @@ export {
   type CallbackDetectionInput,
   type CallbackDetectionResult,
   type RedirectLoopConfig,
-} from './auth/callback-detector.js';
+} from "./auth/callback-detector.js";
 
 // =============================================================================
 // Storage & Environment Detection
@@ -190,14 +194,14 @@ export {
   emitPrivateModeWarning,
   type StorageAvailability,
   type PrivateModeDetection,
-} from './utils/storage-detection.js';
+} from "./utils/storage-detection.js";
 
 export {
   detectITPEnvironment,
   emitITPWarningIfNeeded,
   checkITPAndWarn,
   type ITPDetectionResult,
-} from './utils/itp-detection.js';
+} from "./utils/itp-detection.js";
 
 // =============================================================================
 // Debug Utilities
@@ -212,4 +216,4 @@ export {
   type EventsSummary,
   type EnvironmentSummary,
   type CreateDumpOptions,
-} from './debug/dump.js';
+} from "./debug/dump.js";

@@ -11,22 +11,22 @@ import type {
   DeviceFlowPollResult,
   OIDCDiscoveryDocument,
   TokenSet,
-} from '@authrim/core';
+} from "@authrim/core";
 
 /**
  * Device Flow UI event types
  */
 export type DeviceFlowUIEventType =
-  | 'device:started'
-  | 'device:pending'
-  | 'device:polling'
-  | 'device:slow_down'
-  | 'device:completed'
-  | 'device:expired'
-  | 'device:denied'
-  | 'device:error'
-  | 'device:cancelled'
-  | 'device:countdown';
+  | "device:started"
+  | "device:pending"
+  | "device:polling"
+  | "device:slow_down"
+  | "device:completed"
+  | "device:expired"
+  | "device:denied"
+  | "device:error"
+  | "device:cancelled"
+  | "device:countdown";
 
 /**
  * Device Flow UI event payload
@@ -144,7 +144,7 @@ export class DeviceFlowUI {
    */
   async start(options?: DeviceFlowUIStartOptions): Promise<DeviceFlowState> {
     if (this._running) {
-      throw new Error('Device flow already running');
+      throw new Error("Device flow already running");
     }
 
     this.cancelled = false;
@@ -158,7 +158,7 @@ export class DeviceFlowUI {
 
       // Emit started event
       this.emit({
-        type: 'device:started',
+        type: "device:started",
         state: this._state,
       });
 
@@ -174,7 +174,7 @@ export class DeviceFlowUI {
     } catch (error) {
       this._running = false;
       this.emit({
-        type: 'device:error',
+        type: "device:error",
         state: null,
         error: error instanceof Error ? error : new Error(String(error)),
       });
@@ -191,15 +191,15 @@ export class DeviceFlowUI {
    */
   async pollOnce(): Promise<DeviceFlowPollResult> {
     if (!this._state || !this._running) {
-      throw new Error('Device flow not started');
+      throw new Error("Device flow not started");
     }
 
     if (this.cancelled) {
-      throw new Error('Device flow was cancelled');
+      throw new Error("Device flow was cancelled");
     }
 
     this.emit({
-      type: 'device:polling',
+      type: "device:polling",
       state: this._state,
     });
 
@@ -229,7 +229,7 @@ export class DeviceFlowUI {
 
     // Always emit cancelled event exactly once
     this.emit({
-      type: 'device:cancelled',
+      type: "device:cancelled",
       state: previousState,
     });
   }
@@ -282,9 +282,9 @@ export class DeviceFlowUI {
     }
 
     switch (result.status) {
-      case 'pending':
+      case "pending":
         this.emit({
-          type: 'device:pending',
+          type: "device:pending",
           state: this._state,
           pollResult: result,
         });
@@ -294,11 +294,11 @@ export class DeviceFlowUI {
         }
         break;
 
-      case 'slow_down':
+      case "slow_down":
         // Update interval in state
         this._state.interval = result.retryAfter;
         this.emit({
-          type: 'device:slow_down',
+          type: "device:slow_down",
           state: this._state,
           pollResult: result,
         });
@@ -308,30 +308,30 @@ export class DeviceFlowUI {
         }
         break;
 
-      case 'completed':
+      case "completed":
         this.stopTimers();
         this._running = false;
         this.emit({
-          type: 'device:completed',
+          type: "device:completed",
           state: this._state,
           tokens: result.tokens,
         });
         break;
 
-      case 'expired':
+      case "expired":
         this.stopTimers();
         this._running = false;
         this.emit({
-          type: 'device:expired',
+          type: "device:expired",
           state: this._state,
         });
         break;
 
-      case 'access_denied':
+      case "access_denied":
         this.stopTimers();
         this._running = false;
         this.emit({
-          type: 'device:denied',
+          type: "device:denied",
           state: this._state,
         });
         break;
@@ -359,7 +359,7 @@ export class DeviceFlowUI {
         this.stopTimers();
         this._running = false;
         this.emit({
-          type: 'device:error',
+          type: "device:error",
           state: this._state,
           error: error instanceof Error ? error : new Error(String(error)),
         });
@@ -378,7 +378,7 @@ export class DeviceFlowUI {
       const secondsRemaining = Math.max(0, this._state.expiresAt - now);
 
       this.emit({
-        type: 'device:countdown',
+        type: "device:countdown",
         state: this._state,
         secondsRemaining,
       });
@@ -409,7 +409,7 @@ export class DeviceFlowUI {
       try {
         handler(event);
       } catch (error) {
-        console.error('[DeviceFlowUI] Error in event handler:', error);
+        console.error("[DeviceFlowUI] Error in event handler:", error);
       }
     }
   }
@@ -440,11 +440,11 @@ export function getDeviceFlowQRCodeUrl(state: DeviceFlowState): string {
  */
 export function formatUserCode(
   userCode: string,
-  separator: string = '-',
-  groupSize: number = 4
+  separator: string = "-",
+  groupSize: number = 4,
 ): string {
   // Remove any existing separators/whitespace
-  const cleaned = userCode.replace(/[-\s]/g, '').toUpperCase();
+  const cleaned = userCode.replace(/[-\s]/g, "").toUpperCase();
 
   // Split into groups
   const groups: string[] = [];

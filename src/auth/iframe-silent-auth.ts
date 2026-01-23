@@ -10,9 +10,9 @@
  * - cleanup で iframe.name = '' を実行（保険）
  */
 
-import type { AuthrimClient, SilentAuthOptions, TokenSet } from '@authrim/core';
-import { AuthrimError } from '@authrim/core';
-import { encodeWindowName } from './window-name.js';
+import type { AuthrimClient, SilentAuthOptions, TokenSet } from "@authrim/core";
+import { AuthrimError } from "@authrim/core";
+import { encodeWindowName } from "./window-name.js";
 
 /**
  * Extended silent auth options for browser
@@ -101,13 +101,13 @@ export class IframeSilentAuth {
     // idTokenHint は extraParams 経由で渡す（BuildAuthorizationUrlOptions に含まれていないため）
     const extraParams: Record<string, string> = { ...options.extraParams };
     if (options.idTokenHint) {
-      extraParams['id_token_hint'] = options.idTokenHint;
+      extraParams["id_token_hint"] = options.idTokenHint;
     }
 
     const { url } = await this.client.buildAuthorizationUrl({
       redirectUri: options.redirectUri,
       scope: options.scope,
-      prompt: 'none',
+      prompt: "none",
       loginHint: options.loginHint,
       extraParams,
     });
@@ -115,7 +115,7 @@ export class IframeSilentAuth {
     // P0: URL から state を抽出し、attemptId とマッピング（インスタンス内部のみ）
     // P1: TTL 対応で createdAt を記録
     const authUrl = new URL(url);
-    const expectedState = authUrl.searchParams.get('state');
+    const expectedState = authUrl.searchParams.get("state");
     if (expectedState) {
       this.attemptState.set(attemptId, {
         state: expectedState,
@@ -132,20 +132,20 @@ export class IframeSilentAuth {
         resolve({
           success: false,
           error: new AuthrimError(
-            'dom_not_ready',
-            'document.body not available'
+            "dom_not_ready",
+            "document.body not available",
           ),
         });
         return;
       }
 
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
       // P0: window.name に attemptId と parentOrigin を載せる
       const expectedWindowName = encodeWindowName(
-        'silent',
+        "silent",
         attemptId,
-        parentOrigin
+        parentOrigin,
       );
       iframe.name = expectedWindowName;
 
@@ -154,9 +154,9 @@ export class IframeSilentAuth {
 
       const cleanup = () => {
         if (timeoutId) clearTimeout(timeoutId);
-        window.removeEventListener('message', messageHandler);
+        window.removeEventListener("message", messageHandler);
         // P0: window.name をクリア（別サイト遷移時に残ることがあるため）
-        iframe.name = '';
+        iframe.name = "";
         if (iframe.parentNode) {
           iframe.parentNode.removeChild(iframe);
         }
@@ -169,7 +169,8 @@ export class IframeSilentAuth {
 
         // P0: source チェック (primary) - null/undefined の場合は信頼しない
         // event.source が null になるケース: COOP設定、iframe削除後など
-        const sourceMatch = event.source != null && event.source === iframe.contentWindow;
+        const sourceMatch =
+          event.source != null && event.source === iframe.contentWindow;
         // P0: Secondary fallback: windowName チェック（ブラウザ差分対策）
         // 注意: cleanup で iframe.name = '' になるため、ローカル変数 expectedWindowName を使用
         const nameMatch = event.data?.windowName === expectedWindowName;
@@ -178,7 +179,7 @@ export class IframeSilentAuth {
         if (!sourceMatch && !nameMatch) return;
 
         // type チェック
-        if (event.data?.type !== 'authrim:silent-callback') return;
+        if (event.data?.type !== "authrim:silent-callback") return;
 
         // P0: attemptId 照合
         if (event.data?.attemptId !== attemptId) return;
@@ -194,15 +195,18 @@ export class IframeSilentAuth {
         if (event.data.url && storedState) {
           try {
             // URL から state を抽出して検証
-            const callbackUrlObj = new URL(event.data.url, 'https://dummy.local');
-            const receivedState = callbackUrlObj.searchParams.get('state');
+            const callbackUrlObj = new URL(
+              event.data.url,
+              "https://dummy.local",
+            );
+            const receivedState = callbackUrlObj.searchParams.get("state");
             if (receivedState !== storedState) {
               cleanup();
               resolve({
                 success: false,
                 error: new AuthrimError(
-                  'state_mismatch',
-                  'State parameter mismatch'
+                  "state_mismatch",
+                  "State parameter mismatch",
                 ),
               });
               return;
@@ -213,8 +217,8 @@ export class IframeSilentAuth {
             resolve({
               success: false,
               error: new AuthrimError(
-                'invalid_callback',
-                'Invalid callback URL format'
+                "invalid_callback",
+                "Invalid callback URL format",
               ),
             });
             return;
@@ -226,22 +230,25 @@ export class IframeSilentAuth {
         // URL からエラーチェック
         if (event.data.url) {
           try {
-            const callbackUrlObj = new URL(event.data.url, 'https://dummy.local');
-            const error = callbackUrlObj.searchParams.get('error');
+            const callbackUrlObj = new URL(
+              event.data.url,
+              "https://dummy.local",
+            );
+            const error = callbackUrlObj.searchParams.get("error");
             if (error) {
               const errorDescription =
-                callbackUrlObj.searchParams.get('error_description');
+                callbackUrlObj.searchParams.get("error_description");
               resolve({
                 success: false,
                 error: new AuthrimError(
-                  error === 'login_required'
-                    ? 'login_required'
-                    : error === 'interaction_required'
-                      ? 'interaction_required'
-                      : error === 'consent_required'
-                        ? 'consent_required'
-                        : 'oauth_error',
-                  errorDescription ?? 'Silent auth failed'
+                  error === "login_required"
+                    ? "login_required"
+                    : error === "interaction_required"
+                      ? "interaction_required"
+                      : error === "consent_required"
+                        ? "consent_required"
+                        : "oauth_error",
+                  errorDescription ?? "Silent auth failed",
                 ),
               });
               return;
@@ -250,8 +257,8 @@ export class IframeSilentAuth {
             resolve({
               success: false,
               error: new AuthrimError(
-                'invalid_callback',
-                'Invalid callback URL format'
+                "invalid_callback",
+                "Invalid callback URL format",
               ),
             });
             return;
@@ -267,12 +274,12 @@ export class IframeSilentAuth {
             error:
               error instanceof AuthrimError
                 ? error
-                : new AuthrimError('oauth_error', String(error)),
+                : new AuthrimError("oauth_error", String(error)),
           });
         }
       };
 
-      window.addEventListener('message', messageHandler);
+      window.addEventListener("message", messageHandler);
 
       timeoutId = setTimeout(() => {
         if (!resolved) {
@@ -280,7 +287,7 @@ export class IframeSilentAuth {
           cleanup();
           resolve({
             success: false,
-            error: new AuthrimError('timeout_error', 'Silent auth timed out'),
+            error: new AuthrimError("timeout_error", "Silent auth timed out"),
           });
         }
       }, timeout);

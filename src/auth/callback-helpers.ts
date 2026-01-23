@@ -8,7 +8,7 @@
  * <script>AuthrimWeb.handleSilentCallback();</script>
  */
 
-import { parseWindowName, clearWindowName } from './window-name.js';
+import { parseWindowName, clearWindowName } from "./window-name.js";
 
 /**
  * Silent auth callback handler (call from silent-callback page)
@@ -20,30 +20,30 @@ import { parseWindowName, clearWindowName } from './window-name.js';
 export function handleSilentCallback(): void {
   const originalWindowName = window.name;
   // P0: 'silent' を期待（popup callback との取り違え防止）
-  const meta = parseWindowName(originalWindowName, 'silent');
+  const meta = parseWindowName(originalWindowName, "silent");
 
   if (!meta?.parentOrigin || !meta?.attemptId) {
     console.error(
-      '[Authrim] Invalid window.name format or mode mismatch - cannot send callback'
+      "[Authrim] Invalid window.name format or mode mismatch - cannot send callback",
     );
     return;
   }
 
   // P0: origin 整合性チェック（silent-callback は通常同一 origin）
   if (meta.parentOrigin !== window.location.origin) {
-    console.error('[Authrim] parentOrigin mismatch with callback origin');
+    console.error("[Authrim] parentOrigin mismatch with callback origin");
     clearWindowName();
     return;
   }
 
   window.parent.postMessage(
     {
-      type: 'authrim:silent-callback',
+      type: "authrim:silent-callback",
       url: window.location.href,
       attemptId: meta.attemptId,
       windowName: originalWindowName,
     },
-    meta.parentOrigin
+    meta.parentOrigin,
   );
 
   // P0: 使用後は window.name をクリア（別サイト遷移時に残ることがあるため）
@@ -60,11 +60,11 @@ export function handleSilentCallback(): void {
 export function handlePopupCallback(): void {
   const originalWindowName = window.name;
   // P0: 'popup' を期待（silent callback との取り違え防止）
-  const meta = parseWindowName(originalWindowName, 'popup');
+  const meta = parseWindowName(originalWindowName, "popup");
 
   if (!meta?.parentOrigin || !meta?.attemptId) {
     console.error(
-      '[Authrim] Invalid window.name format or mode mismatch - cannot send callback'
+      "[Authrim] Invalid window.name format or mode mismatch - cannot send callback",
     );
     return;
   }
@@ -74,7 +74,7 @@ export function handlePopupCallback(): void {
     try {
       const openerOrigin = (window.opener as Window)?.location?.origin;
       if (openerOrigin && openerOrigin !== meta.parentOrigin) {
-        console.error('[Authrim] parentOrigin mismatch with opener origin');
+        console.error("[Authrim] parentOrigin mismatch with opener origin");
         clearWindowName();
         window.close();
         return;
@@ -85,12 +85,12 @@ export function handlePopupCallback(): void {
 
     window.opener.postMessage(
       {
-        type: 'authrim:popup-callback',
+        type: "authrim:popup-callback",
         url: window.location.href,
         attemptId: meta.attemptId,
         windowName: originalWindowName,
       },
-      meta.parentOrigin
+      meta.parentOrigin,
     );
 
     // P0: 使用後は window.name をクリア

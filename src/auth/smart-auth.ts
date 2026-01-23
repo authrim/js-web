@@ -11,23 +11,23 @@
  * P1: 明示的な state パラメータ検証を追加
  */
 
-import type { TokenSet } from '@authrim/core';
-import { AuthrimError } from '@authrim/core';
-import type { IframeSilentAuth } from './iframe-silent-auth.js';
+import type { TokenSet } from "@authrim/core";
+import { AuthrimError } from "@authrim/core";
+import type { IframeSilentAuth } from "./iframe-silent-auth.js";
 
 /**
  * 認証結果
  */
 export type CheckSessionResult =
-  | { status: 'authenticated'; tokens: TokenSet }
-  | { status: 'needs_interaction'; reason: 'no_session' }
-  | { status: 'handoff_required'; handoff: HandoffRequest };
+  | { status: "authenticated"; tokens: TokenSet }
+  | { status: "needs_interaction"; reason: "no_session" }
+  | { status: "handoff_required"; handoff: HandoffRequest };
 
 /**
  * Handoff request for ITP fallback
  */
 export interface HandoffRequest {
-  type: 'sso_token';
+  type: "sso_token";
   /** IdP ドメインの handoff ページ URL */
   url: string;
   /** attemptId for postMessage verification */
@@ -49,7 +49,7 @@ export interface SmartAuthOptions {
    * - false: handoff を直接実行（クロスドメイン向け、デフォルト）
    * - 'auto': issuer と RP が同一 origin なら true、そうでなければ false
    */
-  trySilent?: boolean | 'auto';
+  trySilent?: boolean | "auto";
   /** Silent auth timeout in ms */
   silentTimeout?: number;
   /** IdP の handoff ページ URL */
@@ -91,7 +91,7 @@ export class SmartAuth {
   constructor(
     private readonly silentAuth: IframeSilentAuth | null,
     issuer: string,
-    private readonly clientId: string // P0: handoff に client_id を含めるため
+    private readonly clientId: string, // P0: handoff に client_id を含めるため
   ) {
     this.issuerOrigin = new URL(issuer).origin;
   }
@@ -102,7 +102,7 @@ export class SmartAuth {
   async checkSession(options: SmartAuthOptions): Promise<CheckSessionResult> {
     // trySilent の解決
     let shouldTrySilent = options.trySilent ?? false;
-    if (options.trySilent === 'auto') {
+    if (options.trySilent === "auto") {
       // P0: 同一 origin かチェック（サブドメインは別扱い）
       // this.issuerOrigin はコンストラクタで事前計算済み
       shouldTrySilent = this.issuerOrigin === window.location.origin;
@@ -117,12 +117,12 @@ export class SmartAuth {
       });
 
       if (silentResult.success && silentResult.tokens) {
-        return { status: 'authenticated', tokens: silentResult.tokens };
+        return { status: "authenticated", tokens: silentResult.tokens };
       }
 
       // login_required: セッションなし → needs_interaction
-      if (silentResult.error?.code === 'login_required') {
-        return { status: 'needs_interaction', reason: 'no_session' };
+      if (silentResult.error?.code === "login_required") {
+        return { status: "needs_interaction", reason: "no_session" };
       }
 
       // それ以外（timeout, network_error 等）: ITP か判別不能
@@ -134,16 +134,16 @@ export class SmartAuth {
     // P1: CSRF 対策用の state パラメータを生成
     const state = crypto.randomUUID();
     const handoffUrl = new URL(options.handoffUrl);
-    handoffUrl.searchParams.set('attempt_id', attemptId);
-    handoffUrl.searchParams.set('state', state);
-    handoffUrl.searchParams.set('rp_origin', window.location.origin);
+    handoffUrl.searchParams.set("attempt_id", attemptId);
+    handoffUrl.searchParams.set("state", state);
+    handoffUrl.searchParams.set("rp_origin", window.location.origin);
     // P0: client_id を必須で含める（IdP側で rp_origin が許可済みかチェックするため）
-    handoffUrl.searchParams.set('client_id', this.clientId);
+    handoffUrl.searchParams.set("client_id", this.clientId);
 
     return {
-      status: 'handoff_required',
+      status: "handoff_required",
       handoff: {
-        type: 'sso_token',
+        type: "sso_token",
         url: handoffUrl.toString(),
         attemptId,
         state,
@@ -158,7 +158,7 @@ export class SmartAuth {
    */
   async executeHandoff(
     handoff: HandoffRequest,
-    options?: HandoffExecuteOptions
+    options?: HandoffExecuteOptions,
   ): Promise<string> {
     const width = options?.width ?? 450;
     const height = options?.height ?? 500;
@@ -172,11 +172,11 @@ export class SmartAuth {
       const popup = window.open(
         handoff.url,
         windowName,
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
       );
 
       if (!popup) {
-        reject(new AuthrimError('popup_blocked', 'Popup window was blocked'));
+        reject(new AuthrimError("popup_blocked", "Popup window was blocked"));
         return;
       }
 
@@ -187,7 +187,7 @@ export class SmartAuth {
       const cleanup = () => {
         if (checkInterval) clearInterval(checkInterval);
         if (timeoutId) clearTimeout(timeoutId);
-        window.removeEventListener('message', messageHandler);
+        window.removeEventListener("message", messageHandler);
       };
 
       const messageHandler = (event: MessageEvent) => {
@@ -200,7 +200,7 @@ export class SmartAuth {
         if (!sourceMatch && !nameMatch) return;
 
         // type チェック
-        if (event.data?.type !== 'authrim:sso-token') return;
+        if (event.data?.type !== "authrim:sso-token") return;
 
         // attemptId 照合
         if (event.data?.attemptId !== handoff.attemptId) return;
@@ -221,8 +221,8 @@ export class SmartAuth {
           reject(
             new AuthrimError(
               event.data.error,
-              event.data.error_description ?? 'Handoff failed'
-            )
+              event.data.error_description ?? "Handoff failed",
+            ),
           );
           return;
         }
@@ -232,9 +232,9 @@ export class SmartAuth {
         if (!sessionToken) {
           reject(
             new AuthrimError(
-              'invalid_response',
-              'No session token in handoff response'
-            )
+              "invalid_response",
+              "No session token in handoff response",
+            ),
           );
           return;
         }
@@ -242,13 +242,13 @@ export class SmartAuth {
         resolve(sessionToken);
       };
 
-      window.addEventListener('message', messageHandler);
+      window.addEventListener("message", messageHandler);
 
       checkInterval = setInterval(() => {
         if (popup.closed && !resolved) {
           resolved = true;
           cleanup();
-          reject(new AuthrimError('popup_closed', 'Handoff popup was closed'));
+          reject(new AuthrimError("popup_closed", "Handoff popup was closed"));
         }
       }, 500);
 
@@ -259,7 +259,7 @@ export class SmartAuth {
           if (!popup.closed) {
             popup.close();
           }
-          reject(new AuthrimError('timeout_error', 'Handoff timed out'));
+          reject(new AuthrimError("timeout_error", "Handoff timed out"));
         }
       }, timeout);
     });

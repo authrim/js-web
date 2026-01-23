@@ -13,7 +13,7 @@
  * - May not work in ITP environments due to third-party cookie restrictions
  */
 
-import type { CheckSessionResponse } from '@authrim/core';
+import type { CheckSessionResponse } from "@authrim/core";
 
 /**
  * Options for CheckSessionIframeManager
@@ -86,18 +86,21 @@ export class CheckSessionIframeManager {
     try {
       iframeUrl = new URL(options.checkSessionIframeUrl);
     } catch {
-      throw new Error('Invalid checkSessionIframeUrl: must be a valid URL');
+      throw new Error("Invalid checkSessionIframeUrl: must be a valid URL");
     }
 
     // Security: Require HTTPS in production (allow http for localhost development)
-    const isLocalhost = iframeUrl.hostname === 'localhost' || iframeUrl.hostname === '127.0.0.1';
-    if (iframeUrl.protocol !== 'https:' && !isLocalhost) {
-      throw new Error('Invalid checkSessionIframeUrl: must use HTTPS');
+    const isLocalhost =
+      iframeUrl.hostname === "localhost" || iframeUrl.hostname === "127.0.0.1";
+    if (iframeUrl.protocol !== "https:" && !isLocalhost) {
+      throw new Error("Invalid checkSessionIframeUrl: must use HTTPS");
     }
 
     // Security: Verify the iframe URL matches the expected OP origin
     if (iframeUrl.origin !== options.opOrigin) {
-      throw new Error('Invalid checkSessionIframeUrl: origin must match opOrigin');
+      throw new Error(
+        "Invalid checkSessionIframeUrl: origin must match opOrigin",
+      );
     }
 
     this.checkSessionIframeUrl = options.checkSessionIframeUrl;
@@ -131,25 +134,25 @@ export class CheckSessionIframeManager {
 
   private async doInitialize(): Promise<void> {
     // Check if document.body exists
-    if (typeof document === 'undefined' || !document.body) {
-      throw new Error('document.body not available');
+    if (typeof document === "undefined" || !document.body) {
+      throw new Error("document.body not available");
     }
 
     return new Promise((resolve, reject) => {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      iframe.style.border = 'none';
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "none";
 
       // Security: sandbox the iframe
-      iframe.sandbox.add('allow-scripts');
-      iframe.sandbox.add('allow-same-origin');
+      iframe.sandbox.add("allow-scripts");
+      iframe.sandbox.add("allow-same-origin");
 
       iframe.src = this.checkSessionIframeUrl;
 
       const loadTimeout = setTimeout(() => {
-        reject(new Error('check_session_iframe load timeout'));
+        reject(new Error("check_session_iframe load timeout"));
       }, this.timeout);
 
       iframe.onload = () => {
@@ -161,7 +164,7 @@ export class CheckSessionIframeManager {
 
       iframe.onerror = () => {
         clearTimeout(loadTimeout);
-        reject(new Error('check_session_iframe failed to load'));
+        reject(new Error("check_session_iframe failed to load"));
       };
 
       document.body.appendChild(iframe);
@@ -183,19 +186,19 @@ export class CheckSessionIframeManager {
   async checkSession(sessionState: string): Promise<CheckSessionResult> {
     if (!this._initialized || !this.iframe?.contentWindow) {
       return {
-        response: 'error',
+        response: "error",
         success: false,
-        error: new Error('check_session_iframe not initialized'),
+        error: new Error("check_session_iframe not initialized"),
       };
     }
 
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
-        window.removeEventListener('message', messageHandler);
+        window.removeEventListener("message", messageHandler);
         resolve({
-          response: 'error',
+          response: "error",
           success: false,
-          error: new Error('Session check timeout'),
+          error: new Error("Session check timeout"),
         });
       }, this.timeout);
 
@@ -213,15 +216,15 @@ export class CheckSessionIframeManager {
         // Validate response is a valid session response
         const response = event.data;
         if (
-          response !== 'changed' &&
-          response !== 'unchanged' &&
-          response !== 'error'
+          response !== "changed" &&
+          response !== "unchanged" &&
+          response !== "error"
         ) {
           return;
         }
 
         clearTimeout(timeoutId);
-        window.removeEventListener('message', messageHandler);
+        window.removeEventListener("message", messageHandler);
 
         resolve({
           response: response as CheckSessionResponse,
@@ -229,7 +232,7 @@ export class CheckSessionIframeManager {
         });
       };
 
-      window.addEventListener('message', messageHandler);
+      window.addEventListener("message", messageHandler);
 
       // Send check session message: "client_id session_state"
       const message = `${this.clientId} ${sessionState}`;

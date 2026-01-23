@@ -10,23 +10,23 @@
  * List of sensitive field names that should be masked
  */
 const SENSITIVE_FIELDS = new Set([
-  'code_verifier',
-  'codeVerifier',
-  'code',
-  'auth_code',
-  'authCode',
-  'token',
-  'access_token',
-  'accessToken',
-  'refresh_token',
-  'refreshToken',
-  'id_token',
-  'idToken',
-  'secret',
-  'password',
-  'credential',
-  'private_key',
-  'privateKey',
+  "code_verifier",
+  "codeVerifier",
+  "code",
+  "auth_code",
+  "authCode",
+  "token",
+  "access_token",
+  "accessToken",
+  "refresh_token",
+  "refreshToken",
+  "id_token",
+  "idToken",
+  "secret",
+  "password",
+  "credential",
+  "private_key",
+  "privateKey",
 ]);
 
 /**
@@ -37,7 +37,7 @@ const SENSITIVE_FIELDS = new Set([
  */
 export function maskValue(value: string, visibleChars = 4): string {
   if (!value || value.length <= visibleChars * 2) {
-    return '***';
+    return "***";
   }
   const start = value.slice(0, visibleChars);
   const end = value.slice(-visibleChars);
@@ -52,20 +52,27 @@ export function maskValue(value: string, visibleChars = 4): string {
  */
 export function sanitizeForLogging<T extends Record<string, unknown>>(
   obj: T,
-  additionalFields?: string[]
+  additionalFields?: string[],
 ): T {
-  const fieldsToMask = new Set([...SENSITIVE_FIELDS, ...(additionalFields || [])]);
+  const fieldsToMask = new Set([
+    ...SENSITIVE_FIELDS,
+    ...(additionalFields || []),
+  ]);
   const sanitized = { ...obj };
 
   for (const key of Object.keys(sanitized)) {
     const value = sanitized[key];
 
-    if (fieldsToMask.has(key) && typeof value === 'string') {
+    if (fieldsToMask.has(key) && typeof value === "string") {
       (sanitized as Record<string, unknown>)[key] = maskValue(value);
-    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value)
+    ) {
       (sanitized as Record<string, unknown>)[key] = sanitizeForLogging(
         value as Record<string, unknown>,
-        additionalFields
+        additionalFields,
       );
     }
   }
@@ -81,7 +88,7 @@ export function sanitizeForLogging<T extends Record<string, unknown>>(
  */
 export function sanitizeJsonForLogging(
   jsonString: string,
-  additionalFields?: string[]
+  additionalFields?: string[],
 ): string {
   try {
     const parsed = JSON.parse(jsonString);
@@ -103,7 +110,7 @@ export function sanitizeJsonForLogging(
  */
 export function clearSensitiveString(value: { current: string }): void {
   // Overwrite with empty string
-  value.current = '';
+  value.current = "";
 }
 
 /**
@@ -131,13 +138,13 @@ export class SensitiveString {
    * Clear the sensitive value from memory
    */
   clear(): void {
-    this._value = '';
+    this._value = "";
   }
 
   /**
    * Check if the value has been cleared
    */
   isCleared(): boolean {
-    return this._value === '';
+    return this._value === "";
   }
 }

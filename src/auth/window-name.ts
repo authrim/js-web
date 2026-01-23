@@ -8,7 +8,7 @@
  * フォーマット: "authrim:<mode>:<base64url-json>"
  */
 
-export type WindowNameMode = 'silent' | 'popup';
+export type WindowNameMode = "silent" | "popup";
 
 /** チャンクサイズ（String.fromCharCode の引数長制限対策） */
 const CHUNK_SIZE = 0x8000; // 32KB
@@ -23,14 +23,14 @@ const CHUNK_SIZE = 0x8000; // 32KB
 function base64urlEncode(data: string): string {
   const bytes = new TextEncoder().encode(data);
   // Uint8Array → binary（チャンク化）
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
     const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
     binary += String.fromCharCode(...chunk);
   }
   const base64 = btoa(binary);
   // base64url に変換（= なし、+→-、/→_）
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /**
@@ -38,10 +38,10 @@ function base64urlEncode(data: string): string {
  */
 function base64urlDecode(data: string): string {
   // + / に戻す
-  let base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = data.replace(/-/g, "+").replace(/_/g, "/");
   // padding を補完
   const padLength = (4 - (base64.length % 4)) % 4;
-  base64 += '='.repeat(padLength);
+  base64 += "=".repeat(padLength);
   // base64 → binary → Uint8Array → UTF-8 string
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -70,7 +70,7 @@ export interface WindowNameMeta {
 export function encodeWindowName(
   mode: WindowNameMode,
   attemptId: string,
-  parentOrigin: string
+  parentOrigin: string,
 ): string {
   const payload = base64urlEncode(JSON.stringify({ attemptId, parentOrigin }));
   return `authrim:${mode}:${payload}`;
@@ -87,23 +87,23 @@ export function encodeWindowName(
  */
 export function parseWindowName(
   name: string,
-  expectedMode?: WindowNameMode
+  expectedMode?: WindowNameMode,
 ): WindowNameMeta | null {
-  const parts = name.split(':');
-  if (parts.length < 3 || parts[0] !== 'authrim') return null;
+  const parts = name.split(":");
+  if (parts.length < 3 || parts[0] !== "authrim") return null;
 
   // P0: mode の検証（popup/silent の取り違え防止）
   const mode = parts[1] as WindowNameMode;
   if (expectedMode && mode !== expectedMode) {
     console.warn(
-      `[Authrim] window.name mode mismatch: expected ${expectedMode}, got ${mode}`
+      `[Authrim] window.name mode mismatch: expected ${expectedMode}, got ${mode}`,
     );
     return null;
   }
 
   try {
     // base64url 部分を結合（: が含まれていた場合に対応）
-    const payload = parts.slice(2).join(':');
+    const payload = parts.slice(2).join(":");
     return JSON.parse(base64urlDecode(payload));
   } catch {
     return null;
@@ -116,5 +116,5 @@ export function parseWindowName(
  * 使用後は必ずクリアする
  */
 export function clearWindowName(): void {
-  window.name = '';
+  window.name = "";
 }

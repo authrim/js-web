@@ -226,6 +226,107 @@ describe('createAuthrim', () => {
       expect(auth.oauth!.silentAuth).toBeDefined();
       expect(auth.oauth!.popup).toBeDefined();
     });
+
+    it('should expose trySilentLogin when enableOAuth is true', async () => {
+      const config: AuthrimConfig = {
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      };
+
+      const auth = await createAuthrim(config);
+
+      expect(auth.oauth).toBeDefined();
+      expect(auth.oauth!.trySilentLogin).toBeDefined();
+      expect(typeof auth.oauth!.trySilentLogin).toBe('function');
+    });
+
+    it('should expose handleSilentCallback when enableOAuth is true', async () => {
+      const config: AuthrimConfig = {
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      };
+
+      const auth = await createAuthrim(config);
+
+      expect(auth.oauth).toBeDefined();
+      expect(auth.oauth!.handleSilentCallback).toBeDefined();
+      expect(typeof auth.oauth!.handleSilentCallback).toBe('function');
+    });
+  });
+
+  describe('Silent Login OAuth methods', () => {
+    let originalLocation: Location;
+
+    beforeEach(() => {
+      // Mock window.location
+      originalLocation = window.location;
+      const mockLocation = {
+        href: 'https://app.example.com/',
+        origin: 'https://app.example.com',
+        pathname: '/',
+        search: '',
+        assign: vi.fn(),
+      };
+      Object.defineProperty(window, 'location', {
+        value: mockLocation,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it('trySilentLogin should throw on cross-origin returnTo', async () => {
+      const config: AuthrimConfig = {
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      };
+
+      const auth = await createAuthrim(config);
+
+      // Cross-origin returnTo should be rejected
+      await expect(
+        auth.oauth!.trySilentLogin({ returnTo: 'https://evil.com/' })
+      ).rejects.toThrow('returnTo must be same origin');
+    });
+
+    it('trySilentLogin should throw on javascript: URL', async () => {
+      const config: AuthrimConfig = {
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      };
+
+      const auth = await createAuthrim(config);
+
+      await expect(
+        auth.oauth!.trySilentLogin({ returnTo: 'javascript:alert(1)' })
+      ).rejects.toThrow('returnTo must be same origin');
+    });
+
+    it('handleSilentCallback should return error when not a silent login callback', async () => {
+      const config: AuthrimConfig = {
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      };
+
+      const auth = await createAuthrim(config);
+
+      // No state parameter = not a silent login callback
+      // Returns { status: 'error', error: 'not_silent_login' }
+      const result = await auth.oauth!.handleSilentCallback();
+      expect(result).toEqual({ status: 'error', error: 'not_silent_login' });
+    });
   });
 
   describe('shortcuts delegate correctly', () => {

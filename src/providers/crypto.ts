@@ -4,8 +4,8 @@
  * Web Crypto API を使用したプラットフォーム実装
  */
 
-import type { CryptoProvider } from '@authrim/core';
-import { base64urlEncode } from '@authrim/core';
+import type { CryptoProvider } from "@authrim/core";
+import { base64urlEncode } from "@authrim/core";
 
 /**
  * Browser Crypto Provider implementation
@@ -28,7 +28,7 @@ export class BrowserCryptoProvider implements CryptoProvider {
   async sha256(data: string): Promise<Uint8Array> {
     const encoder = new TextEncoder();
     const bytes = encoder.encode(data);
-    const hash = await crypto.subtle.digest('SHA-256', bytes);
+    const hash = await crypto.subtle.digest("SHA-256", bytes);
     return new Uint8Array(hash);
   }
 

@@ -4,8 +4,8 @@
  * Detects Safari ITP environment and provides recommendations.
  */
 
-import type { EventEmitter } from '@authrim/core';
-import { detectPrivateMode } from './storage-detection.js';
+import type { EventEmitter } from "@authrim/core";
+import { detectPrivateMode } from "./storage-detection.js";
 
 /**
  * ITP detection result
@@ -22,33 +22,38 @@ export interface ITPDetectionResult {
   /** Whether storage is partitioned */
   storagePartitioned: boolean;
   /** Recommended authentication flow */
-  recommendation: 'use_redirect' | 'use_popup' | 'normal';
+  recommendation: "use_redirect" | "use_popup" | "normal";
 }
 
 /**
  * Detect Safari browser
  */
 function isSafari(): boolean {
-  if (typeof navigator === 'undefined') {
+  if (typeof navigator === "undefined") {
     return false;
   }
 
   const ua = navigator.userAgent.toLowerCase();
 
   // Safari but not Chrome/Edge (which also include Safari in UA)
-  return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium') && !ua.includes('edg');
+  return (
+    ua.includes("safari") &&
+    !ua.includes("chrome") &&
+    !ua.includes("chromium") &&
+    !ua.includes("edg")
+  );
 }
 
 /**
  * Detect WebKit-based browser
  */
 function isWebKit(): boolean {
-  if (typeof navigator === 'undefined') {
+  if (typeof navigator === "undefined") {
     return false;
   }
 
   const ua = navigator.userAgent.toLowerCase();
-  return ua.includes('webkit');
+  return ua.includes("webkit");
 }
 
 /**
@@ -68,7 +73,7 @@ async function checkThirdPartyCookies(): Promise<boolean> {
   // Check if we're in a third-party context
   try {
     // If we can't access parent frame, we might be in an iframe
-    if (typeof window !== 'undefined' && window.self !== window.top) {
+    if (typeof window !== "undefined" && window.self !== window.top) {
       // In iframe context, assume cookies are blocked in Safari
       return true;
     }
@@ -93,7 +98,7 @@ async function checkStoragePartitioning(): Promise<boolean> {
   // Storage partitioning check is complex and depends on context
   // For now, assume partitioned in cross-site iframe contexts
   try {
-    if (typeof window !== 'undefined' && window.self !== window.top) {
+    if (typeof window !== "undefined" && window.self !== window.top) {
       return true;
     }
   } catch {
@@ -123,18 +128,19 @@ export async function detectITPEnvironment(): Promise<ITPDetectionResult> {
   const storagePartitioned = await checkStoragePartitioning();
 
   // Determine if ITP is affecting the session
-  const isITPAffected = safari && (cookiesBlocked || storagePartitioned || isPrivateMode === true);
+  const isITPAffected =
+    safari && (cookiesBlocked || storagePartitioned || isPrivateMode === true);
 
   // Recommendation based on detection
-  let recommendation: ITPDetectionResult['recommendation'] = 'normal';
+  let recommendation: ITPDetectionResult["recommendation"] = "normal";
 
   if (isITPAffected) {
     // In ITP-affected environments, redirect flow is more reliable
     // as it doesn't rely on popup windows or iframes which may be blocked
-    recommendation = 'use_redirect';
+    recommendation = "use_redirect";
   } else if (safari && !isPrivateMode) {
     // Safari in normal mode - popup might work but redirect is safer
-    recommendation = 'use_popup';
+    recommendation = "use_popup";
   }
 
   return {
@@ -155,33 +161,33 @@ export async function detectITPEnvironment(): Promise<ITPDetectionResult> {
  */
 export function emitITPWarningIfNeeded(
   eventEmitter: EventEmitter,
-  detection: ITPDetectionResult
+  detection: ITPDetectionResult,
 ): void {
   if (detection.isITPAffected) {
-    let browser: 'safari' | 'webkit' | 'unknown' = 'unknown';
+    let browser: "safari" | "webkit" | "unknown" = "unknown";
     if (detection.isSafari) {
-      browser = 'safari';
+      browser = "safari";
     } else if (isWebKit()) {
-      browser = 'webkit';
+      browser = "webkit";
     }
 
     const issues: string[] = [];
     if (detection.cookiesBlocked) {
-      issues.push('third-party cookies blocked');
+      issues.push("third-party cookies blocked");
     }
     if (detection.storagePartitioned) {
-      issues.push('storage partitioned');
+      issues.push("storage partitioned");
     }
     if (detection.isPrivateMode) {
-      issues.push('private browsing mode');
+      issues.push("private browsing mode");
     }
 
-    eventEmitter.emit('warning:itp', {
-      message: `ITP environment detected: ${issues.join(', ')}. Consider using ${detection.recommendation.replace('_', ' ')} flow.`,
+    eventEmitter.emit("warning:itp", {
+      message: `ITP environment detected: ${issues.join(", ")}. Consider using ${detection.recommendation.replace("_", " ")} flow.`,
       browser,
       recommendation: detection.recommendation,
       timestamp: Date.now(),
-      source: 'web',
+      source: "web",
     });
   }
 }
@@ -195,7 +201,7 @@ export function emitITPWarningIfNeeded(
  * @returns ITP detection result
  */
 export async function checkITPAndWarn(
-  eventEmitter: EventEmitter
+  eventEmitter: EventEmitter,
 ): Promise<ITPDetectionResult> {
   const detection = await detectITPEnvironment();
   emitITPWarningIfNeeded(eventEmitter, detection);
