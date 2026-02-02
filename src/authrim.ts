@@ -13,6 +13,7 @@ import type {
   SocialLoginOptions,
   SocialProvider,
   SilentLoginStateData,
+  IDiagnosticLogger,
 } from "@authrim/core";
 
 import {
@@ -415,6 +416,9 @@ export async function createAuthrim<T extends AuthrimConfig>(
     signUp: createShortcuts.signUp(passkey),
     signOut,
     on,
+    setDiagnosticLogger(logger: IDiagnosticLogger | null) {
+      sessionManager.setDiagnosticLogger(logger);
+    },
   };
 
   // ==========================================================================

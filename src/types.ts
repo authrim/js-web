@@ -18,6 +18,7 @@ import type {
   SocialLoginOptions,
   DirectAuthLogoutOptions,
   NextAction,
+  IDiagnosticLogger,
 } from "@authrim/core";
 
 // =============================================================================
@@ -495,6 +496,7 @@ export interface AuthrimBase {
 
   // Utility
   signOut(options?: SignOutOptions): Promise<void>;
+  setDiagnosticLogger?(logger: IDiagnosticLogger | null): void;
 
   // Event system
   on<E extends AuthEventName>(

@@ -12,6 +12,7 @@
 
 import {
   AuthrimError,
+  type IDiagnosticLogger,
   type SessionAuth,
   type Session,
   type DirectAuthLogoutOptions,
@@ -73,6 +74,7 @@ export class SessionAuthImpl implements SessionAuth {
   private readonly clientId: string;
   private readonly http: BrowserHttpClient;
   private readonly storageKey: string;
+  private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // Cached session
   private cachedSession: Session | null = null;
@@ -85,6 +87,13 @@ export class SessionAuthImpl implements SessionAuth {
     this.clientId = options.clientId;
     this.http = options.http;
     this.storageKey = getStorageKey(options.issuer, options.clientId);
+  }
+
+  /**
+   * Set diagnostic logger (optional)
+   */
+  setDiagnosticLogger(logger: IDiagnosticLogger | null): void {
+    this.diagnosticLogger = logger;
   }
 
   /**
@@ -269,16 +278,37 @@ export class SessionAuthImpl implements SessionAuth {
       request_refresh_token: requestRefreshToken,
     };
 
-    const response = await this.http.fetch<DirectAuthTokenResponse>(
-      `${this.issuer}${ENDPOINTS.TOKEN}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      },
-    );
+    let response;
+    try {
+      response = await this.http.fetch<DirectAuthTokenResponse>(
+        `${this.issuer}${ENDPOINTS.TOKEN}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        },
+      );
+    } catch (error) {
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: "direct_auth_token_exchange_error",
+        flow: "direct",
+        context: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      throw error;
+    }
 
     if (!response.ok || !response.data) {
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: "direct_auth_token_exchange_failed",
+        flow: "direct",
+        context: {
+          status: response.status,
+        },
+      });
       // Handle specific error cases
       if (response.status === 400) {
         const errorData = response.data as unknown as {
@@ -308,6 +338,12 @@ export class SessionAuthImpl implements SessionAuth {
     }
 
     const tokenResponse = response.data;
+
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "allow",
+      reason: "direct_auth_token_exchange_success",
+      flow: "direct",
+    });
 
     // Store access_token in localStorage for subsequent requests
     if (tokenResponse.access_token) {
