@@ -24,6 +24,7 @@ export { createAuthrim } from "./authrim.js";
 export type {
   // Configuration
   AuthrimConfig,
+  DiagnosticLoggingOptions,
 
   // Response types (Discriminated Union)
   AuthResponse,
@@ -217,3 +218,19 @@ export {
   type EnvironmentSummary,
   type CreateDumpOptions,
 } from "./debug/dump.js";
+
+// Diagnostic Logger (for OIDF conformance testing)
+export {
+  DiagnosticLogger,
+  createDiagnosticLogger,
+  loadDiagnosticSessionId,
+} from './debug/diagnostic-logger.js';
+export type {
+  DiagnosticLogLevel,
+  TokenValidationStep,
+  BaseDiagnosticLogEntry,
+  TokenValidationLogEntry,
+  AuthDecisionLogEntry,
+  DiagnosticLogEntry,
+  DiagnosticLoggerOptions,
+} from './debug/diagnostic-logger.js';

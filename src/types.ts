@@ -46,6 +46,50 @@ export interface StorageOptions {
 }
 
 /**
+ * Diagnostic logging options for OIDF conformance testing
+ */
+export interface DiagnosticLoggingOptions {
+  /**
+   * Enable diagnostic logging
+   *
+   * When enabled, the SDK will log token validation steps, authentication
+   * decisions, and other diagnostic information for OIDF conformance testing.
+   */
+  enabled: boolean;
+
+  /**
+   * Persist logs to localStorage across page reloads
+   *
+   * Default: false
+   */
+  persistToStorage?: boolean;
+
+  /**
+   * localStorage key prefix
+   *
+   * Default: 'authrim:diagnostic'
+   */
+  storageKeyPrefix?: string;
+
+  /**
+   * Maximum number of logs to collect
+   *
+   * Default: 1000
+   */
+  maxLogs?: number;
+
+  /**
+   * Resume existing diagnostic session from localStorage
+   *
+   * If true, loads existing diagnosticSessionId from localStorage.
+   * If false, creates a new diagnosticSessionId.
+   *
+   * Default: false
+   */
+  resumeSession?: boolean;
+}
+
+/**
  * Authrim client configuration
  */
 export interface AuthrimConfig {
@@ -74,6 +118,13 @@ export interface AuthrimConfig {
    * This should be a page that calls `auth.oauth.handleSilentCallback()`
    */
   silentLoginRedirectUri?: string;
+  /**
+   * Diagnostic logging options for OIDF conformance testing
+   *
+   * When enabled, SDK will log detailed token validation steps and
+   * authentication decisions. Logs can be exported for OIDF submission.
+   */
+  diagnosticLogging?: DiagnosticLoggingOptions;
 }
 
 // =============================================================================

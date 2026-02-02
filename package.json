@@ -1,7 +1,7 @@
 {
   "name": "@authrim/web",
   "packageManager": "pnpm@9.15.0",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Browser implementation for Authrim SDK",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -63,7 +63,7 @@
     "url": "https://github.com/authrim/js-web/issues"
   },
   "dependencies": {
-    "@authrim/core": "^0.1.10"
+    "@authrim/core": "^0.1.12"
   },
   "devDependencies": {
     "@types/jsdom": "^27.0.0",

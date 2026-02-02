@@ -15,6 +15,11 @@ import type {
   SilentLoginStateData,
 } from "@authrim/core";
 
+import {
+  createDiagnosticLogger,
+  loadDiagnosticSessionId,
+} from "./debug/diagnostic-logger.js";
+
 import type {
   AuthrimConfig,
   Authrim,
@@ -450,6 +455,30 @@ async function createOAuthNamespace(
     crypto,
     storage,
   });
+
+  // Set up diagnostic logging if enabled
+  if (config.diagnosticLogging?.enabled) {
+    const diagnosticOptions = config.diagnosticLogging;
+
+    // Load existing sessionId if resumeSession is true
+    const existingSessionId = diagnosticOptions.resumeSession
+      ? loadDiagnosticSessionId(diagnosticOptions.storageKeyPrefix)
+      : null;
+
+    // Create diagnostic logger
+    const diagnosticLogger = createDiagnosticLogger({
+      enabled: true,
+      persistToStorage: diagnosticOptions.persistToStorage,
+      storageKeyPrefix: diagnosticOptions.storageKeyPrefix,
+      maxLogs: diagnosticOptions.maxLogs,
+      sessionId: existingSessionId ?? undefined,
+    });
+
+    // Set diagnostic logger on core client
+    if (diagnosticLogger) {
+      coreClient.setDiagnosticLogger(diagnosticLogger);
+    }
+  }
 
   const silentAuth = new IframeSilentAuth(coreClient);
   const popupAuth = new PopupAuth(coreClient);

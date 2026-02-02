@@ -1004,7 +1004,7 @@ Apache-2.0
 |---------|-------------|--------|
 | [@authrim/core](https://www.npmjs.com/package/@authrim/core) | Platform-agnostic core library | ✅ Available |
 | @authrim/react | React hooks and components | 🚧 Planned |
-| @authrim/svelte | Svelte/SvelteKit integration | 🚧 Planned |
+| [@authrim/sveltekit](https://www.npmjs.com/package/@authrim/sveltekit) | SvelteKit integration | ✅ Available |
 | @authrim/vue | Vue.js integration | 🚧 Planned |
 
 ---
