@@ -11,23 +11,23 @@
  * - Console output integration
  */
 
-import type { DebugLogger, IDiagnosticLogger } from '@authrim/core';
+import type { DebugLogger, IDiagnosticLogger } from "@authrim/core";
 
 /**
  * Diagnostic log level
  */
-export type DiagnosticLogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type DiagnosticLogLevel = "debug" | "info" | "warn" | "error";
 
 /**
  * Token validation step
  */
 export type TokenValidationStep =
-  | 'issuer-check'
-  | 'audience-check'
-  | 'expiry-check'
-  | 'nonce-check'
-  | 'signature-check'
-  | 'hash-check';
+  | "issuer-check"
+  | "audience-check"
+  | "expiry-check"
+  | "nonce-check"
+  | "signature-check"
+  | "hash-check";
 
 /**
  * Base diagnostic log entry
@@ -56,7 +56,7 @@ export interface BaseDiagnosticLogEntry {
  * Token Validation Log Entry
  */
 export interface TokenValidationLogEntry extends BaseDiagnosticLogEntry {
-  category: 'token-validation';
+  category: "token-validation";
 
   /** Validation step */
   step: TokenValidationStep;
@@ -65,7 +65,7 @@ export interface TokenValidationLogEntry extends BaseDiagnosticLogEntry {
   tokenType: string;
 
   /** Validation result */
-  result: 'pass' | 'fail';
+  result: "pass" | "fail";
 
   /** Expected value (for validation) */
   expected?: unknown;
@@ -84,10 +84,10 @@ export interface TokenValidationLogEntry extends BaseDiagnosticLogEntry {
  * Authentication Decision Log Entry
  */
 export interface AuthDecisionLogEntry extends BaseDiagnosticLogEntry {
-  category: 'auth-decision';
+  category: "auth-decision";
 
   /** Final authentication decision */
-  decision: 'allow' | 'deny';
+  decision: "allow" | "deny";
 
   /** Reason for the decision */
   reason: string;
@@ -125,6 +125,24 @@ export interface DiagnosticLoggerOptions {
 
   /** Use existing diagnosticSessionId (for resuming) */
   sessionId?: string;
+
+  /** Send logs to server (default: false) */
+  sendToServer?: boolean;
+
+  /** Server URL for sending logs */
+  serverUrl?: string;
+
+  /** Client ID for authentication */
+  clientId?: string;
+
+  /** Client secret for authentication (confidential clients only) */
+  clientSecret?: string;
+
+  /** Batch size for sending logs (default: 50) */
+  batchSize?: number;
+
+  /** Flush interval in milliseconds (default: 5000) */
+  flushIntervalMs?: number;
 }
 
 /**
@@ -139,12 +157,41 @@ export class DiagnosticLogger implements IDiagnosticLogger {
   private maxLogs: number;
   private logs: DiagnosticLogEntry[] = [];
 
+  // Server sending options
+  private sendToServer: boolean;
+  private serverUrl?: string;
+  private clientId?: string;
+  private clientSecret?: string;
+  private batchSize: number;
+  private flushIntervalMs: number;
+
+  // Buffering for batch sending
+  private sendBuffer: DiagnosticLogEntry[] = [];
+  private flushTimer?: ReturnType<typeof setTimeout>;
+  private isFlushing = false;
+
   constructor(options: DiagnosticLoggerOptions) {
     this.enabled = options.enabled;
     this.debugLogger = options.debugLogger;
     this.persistToStorage = options.persistToStorage ?? false;
-    this.storageKeyPrefix = options.storageKeyPrefix ?? 'authrim:diagnostic';
+    this.storageKeyPrefix = options.storageKeyPrefix ?? "authrim:diagnostic";
     this.maxLogs = options.maxLogs ?? 1000;
+
+    // Server sending options
+    this.sendToServer = options.sendToServer ?? false;
+    this.serverUrl = options.serverUrl;
+    this.clientId = options.clientId;
+    this.clientSecret = options.clientSecret;
+    this.batchSize = options.batchSize ?? 50;
+    this.flushIntervalMs = options.flushIntervalMs ?? 5000;
+
+    // Validate server sending config
+    if (this.sendToServer && (!this.serverUrl || !this.clientId)) {
+      console.warn(
+        "[DiagnosticLogger] sendToServer is enabled but serverUrl or clientId is missing. Server sending disabled.",
+      );
+      this.sendToServer = false;
+    }
 
     // Use existing sessionId or generate new one
     if (options.sessionId) {
@@ -162,6 +209,28 @@ export class DiagnosticLogger implements IDiagnosticLogger {
     if (this.persistToStorage) {
       this.loadLogsFromStorage();
     }
+
+    // Register page unload/visibility handlers for server sending
+    if (this.sendToServer) {
+      this.registerUnloadHandlers();
+    }
+  }
+
+  /**
+   * Register page unload handlers to flush logs before page close
+   */
+  private registerUnloadHandlers(): void {
+    // Flush on page unload (beforeunload)
+    window.addEventListener("beforeunload", () => {
+      this.flushSync();
+    });
+
+    // Flush on visibility change (page hidden)
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        this.flushSync();
+      }
+    });
   }
 
   /**
@@ -187,7 +256,7 @@ export class DiagnosticLogger implements IDiagnosticLogger {
   logTokenValidation(options: {
     step: TokenValidationStep;
     tokenType: string;
-    result: 'pass' | 'fail';
+    result: "pass" | "fail";
     expected?: unknown;
     actual?: unknown;
     errorMessage?: string;
@@ -198,8 +267,8 @@ export class DiagnosticLogger implements IDiagnosticLogger {
     const entry: TokenValidationLogEntry = {
       id: this.generateEntryId(),
       diagnosticSessionId: this.diagnosticSessionId,
-      category: 'token-validation',
-      level: options.result === 'fail' ? 'error' : 'debug',
+      category: "token-validation",
+      level: options.result === "fail" ? "error" : "debug",
       timestamp: Date.now(),
       step: options.step,
       tokenType: options.tokenType,
@@ -217,7 +286,7 @@ export class DiagnosticLogger implements IDiagnosticLogger {
    * Log authentication decision
    */
   logAuthDecision(options: {
-    decision: 'allow' | 'deny';
+    decision: "allow" | "deny";
     reason: string;
     flow?: string;
     context?: Record<string, unknown>;
@@ -227,8 +296,8 @@ export class DiagnosticLogger implements IDiagnosticLogger {
     const entry: AuthDecisionLogEntry = {
       id: this.generateEntryId(),
       diagnosticSessionId: this.diagnosticSessionId,
-      category: 'auth-decision',
-      level: options.decision === 'deny' ? 'warn' : 'info',
+      category: "auth-decision",
+      level: options.decision === "deny" ? "warn" : "info",
       timestamp: Date.now(),
       decision: options.decision,
       reason: options.reason,
@@ -260,10 +329,10 @@ export class DiagnosticLogger implements IDiagnosticLogger {
    */
   downloadLogs(filename?: string): void {
     const logsJson = this.exportLogs();
-    const blob = new Blob([logsJson], { type: 'application/json' });
+    const blob = new Blob([logsJson], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = filename ?? `diagnostic-logs-${this.diagnosticSessionId}.json`;
     document.body.appendChild(a);
@@ -302,7 +371,11 @@ export class DiagnosticLogger implements IDiagnosticLogger {
   private writeLog(entry: DiagnosticLogEntry): void {
     // Output to debug logger
     if (this.debugLogger) {
-      this.debugLogger.log(entry.level, `[DIAGNOSTIC] ${entry.category}`, entry);
+      this.debugLogger.log(
+        entry.level,
+        `[DIAGNOSTIC] ${entry.category}`,
+        entry,
+      );
     }
 
     // Collect in memory
@@ -317,6 +390,165 @@ export class DiagnosticLogger implements IDiagnosticLogger {
     if (this.persistToStorage) {
       this.saveLogsToStorage();
     }
+
+    // Buffer for server sending
+    if (this.sendToServer) {
+      this.bufferLog(entry);
+    }
+  }
+
+  /**
+   * Buffer log entry for batch sending
+   */
+  private bufferLog(entry: DiagnosticLogEntry): void {
+    this.sendBuffer.push(entry);
+
+    // Flush if batch size reached
+    if (this.sendBuffer.length >= this.batchSize) {
+      void this.flush();
+    } else {
+      // Schedule flush
+      this.scheduleFlush();
+    }
+  }
+
+  /**
+   * Schedule automatic flush
+   */
+  private scheduleFlush(): void {
+    // Clear existing timer
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+    }
+
+    // Set new timer
+    this.flushTimer = setTimeout(() => {
+      void this.flush();
+    }, this.flushIntervalMs);
+  }
+
+  /**
+   * Flush buffered logs to server (async)
+   */
+  async flush(): Promise<void> {
+    // Skip if already flushing or buffer is empty
+    if (this.isFlushing || this.sendBuffer.length === 0) {
+      return;
+    }
+
+    // Clear scheduled flush
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+
+    this.isFlushing = true;
+
+    // Take logs from buffer
+    const logsToSend = [...this.sendBuffer];
+    this.sendBuffer = [];
+
+    try {
+      const response = await fetch(
+        `${this.serverUrl}/api/v1/diagnostic-logs/ingest`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Diagnostic-Session-Id": this.diagnosticSessionId,
+          },
+          body: JSON.stringify({
+            logs: logsToSend,
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        this.handleSendFailure(
+          logsToSend,
+          `HTTP ${response.status}: ${response.statusText}`,
+        );
+      } else {
+        if (this.debugLogger) {
+          this.debugLogger.log(
+            "debug",
+            `[DIAGNOSTIC] Sent ${logsToSend.length} logs to server`,
+          );
+        }
+      }
+    } catch (error) {
+      this.handleSendFailure(
+        logsToSend,
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      this.isFlushing = false;
+    }
+  }
+
+  /**
+   * Flush logs synchronously using navigator.sendBeacon (for page unload)
+   */
+  private flushSync(): void {
+    if (this.sendBuffer.length === 0) {
+      return;
+    }
+
+    // Clear scheduled flush
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+
+    const logsToSend = [...this.sendBuffer];
+    this.sendBuffer = [];
+
+    try {
+      const payload = JSON.stringify({
+        logs: logsToSend,
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+      });
+
+      // Use sendBeacon for reliable sending during page unload
+      const sent = navigator.sendBeacon(
+        `${this.serverUrl}/api/v1/diagnostic-logs/ingest`,
+        new Blob([payload], { type: "application/json" }),
+      );
+
+      if (!sent) {
+        console.warn("[DiagnosticLogger] Failed to send logs via sendBeacon");
+      }
+    } catch (error) {
+      console.warn(
+        "[DiagnosticLogger] Failed to flush logs synchronously:",
+        error,
+      );
+    }
+  }
+
+  /**
+   * Handle send failure
+   */
+  private handleSendFailure(_logs: DiagnosticLogEntry[], reason: string): void {
+    if (this.debugLogger) {
+      this.debugLogger.log(
+        "warn",
+        `[DIAGNOSTIC] Failed to send logs to server: ${reason}`,
+      );
+    }
+
+    // If persistToStorage is enabled, logs are already saved to localStorage
+    // No need to add them to this.logs again
+  }
+
+  /**
+   * Get buffered logs count (for debugging)
+   */
+  getBufferedLogsCount(): number {
+    return this.sendBuffer.length;
   }
 
   /**
@@ -324,14 +556,14 @@ export class DiagnosticLogger implements IDiagnosticLogger {
    */
   private generateSessionId(): string {
     // Use crypto.randomUUID if available (modern browsers)
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
       return crypto.randomUUID();
     }
 
     // Fallback: generate UUID v4
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
       const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
   }
@@ -351,7 +583,10 @@ export class DiagnosticLogger implements IDiagnosticLogger {
       const key = `${this.storageKeyPrefix}:sessionId`;
       localStorage.setItem(key, this.diagnosticSessionId);
     } catch (error) {
-      console.warn('[DiagnosticLogger] Failed to save sessionId to localStorage:', error);
+      console.warn(
+        "[DiagnosticLogger] Failed to save sessionId to localStorage:",
+        error,
+      );
     }
   }
 
@@ -363,7 +598,10 @@ export class DiagnosticLogger implements IDiagnosticLogger {
       const key = `${this.storageKeyPrefix}:logs`;
       localStorage.setItem(key, JSON.stringify(this.logs));
     } catch (error) {
-      console.warn('[DiagnosticLogger] Failed to save logs to localStorage:', error);
+      console.warn(
+        "[DiagnosticLogger] Failed to save logs to localStorage:",
+        error,
+      );
     }
   }
 
@@ -383,14 +621,17 @@ export class DiagnosticLogger implements IDiagnosticLogger {
           this.logs = parsed.filter((entry) => {
             return (
               entry.diagnosticSessionId === this.diagnosticSessionId &&
-              typeof entry.timestamp === 'number' &&
-              typeof entry.category === 'string'
+              typeof entry.timestamp === "number" &&
+              typeof entry.category === "string"
             );
           });
         }
       }
     } catch (error) {
-      console.warn('[DiagnosticLogger] Failed to load logs from localStorage:', error);
+      console.warn(
+        "[DiagnosticLogger] Failed to load logs from localStorage:",
+        error,
+      );
     }
   }
 
@@ -402,7 +643,10 @@ export class DiagnosticLogger implements IDiagnosticLogger {
       const key = `${this.storageKeyPrefix}:logs`;
       localStorage.removeItem(key);
     } catch (error) {
-      console.warn('[DiagnosticLogger] Failed to clear logs from localStorage:', error);
+      console.warn(
+        "[DiagnosticLogger] Failed to clear logs from localStorage:",
+        error,
+      );
     }
   }
 }
@@ -414,7 +658,7 @@ export class DiagnosticLogger implements IDiagnosticLogger {
  * @returns DiagnosticLogger instance or null if disabled
  */
 export function createDiagnosticLogger(
-  options: DiagnosticLoggerOptions
+  options: DiagnosticLoggerOptions,
 ): DiagnosticLogger | null {
   if (!options.enabled) {
     return null;
@@ -430,13 +674,16 @@ export function createDiagnosticLogger(
  * @returns Existing diagnosticSessionId or null
  */
 export function loadDiagnosticSessionId(
-  storageKeyPrefix: string = 'authrim:diagnostic'
+  storageKeyPrefix: string = "authrim:diagnostic",
 ): string | null {
   try {
     const key = `${storageKeyPrefix}:sessionId`;
     return localStorage.getItem(key);
   } catch (error) {
-    console.warn('[DiagnosticLogger] Failed to load sessionId from localStorage:', error);
+    console.warn(
+      "[DiagnosticLogger] Failed to load sessionId from localStorage:",
+      error,
+    );
     return null;
   }
 }
