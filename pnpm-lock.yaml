@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@authrim/core':
-        specifier: file:../js-core/packages/core
-        version: file:../js-core/packages/core
+        specifier: ^0.1.12
+        version: 0.1.12
     devDependencies:
       '@types/jsdom':
         specifier: ^27.0.0
@@ -51,8 +51,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@authrim/core@file:../js-core/packages/core':
-    resolution: {directory: ../js-core/packages/core, type: directory}
+  '@authrim/core@0.1.12':
+    resolution: {integrity: sha512-sK15s0Z+XnvpbvDNgzl8zwbL2dZdeA03yKF7iUhoAMaru1U6RUteQtV5/jG8h9m9q6IA0pbbpMj2muAGc+XlJw==}
     engines: {node: '>=18'}
 
   '@csstools/color-helpers@5.1.0':
@@ -1515,7 +1515,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@authrim/core@file:../js-core/packages/core': {}
+  '@authrim/core@0.1.12': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
