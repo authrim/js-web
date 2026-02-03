@@ -114,11 +114,11 @@ describe('SocialAuthImpl', () => {
   });
 
   describe('hasCallbackParams', () => {
-    it('should return true when external_auth param is present', () => {
+    it('should return true when code param is present', () => {
       Object.defineProperty(window, 'location', {
         value: {
           ...window.location,
-          search: '?external_auth=success',
+          search: '?code=abc123',
         },
         writable: true,
       });
@@ -345,7 +345,7 @@ describe('SocialAuthImpl', () => {
       expect(result.error?.error_description).toBe('User cancelled');
     });
 
-    it('should return error when external_auth param is missing', async () => {
+    it('should return error when code param is missing', async () => {
       Object.defineProperty(window, 'location', {
         value: {
           ...window.location,
@@ -362,11 +362,14 @@ describe('SocialAuthImpl', () => {
     });
 
     it('should successfully handle External IdP callback', async () => {
+      // Store code_verifier first
+      await mockStorage.set('authrim:direct:social:code_verifier', 'test-verifier');
+
       Object.defineProperty(window, 'location', {
         value: {
           origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?external_auth=success',
-          search: '?external_auth=success',
+          href: 'https://example.com/callback?code=test-code',
+          search: '?code=test-code',
         },
         writable: true,
       });
@@ -374,17 +377,20 @@ describe('SocialAuthImpl', () => {
       const result = await social.handleCallback();
 
       expect(result.success).toBe(true);
-      // Session is set via cookie by External IdP worker
-      // No token exchange needed
-      expect(mockExchangeToken).not.toHaveBeenCalled();
+      expect(result.session).toBeDefined();
+      expect(result.user).toBeDefined();
+      expect(mockExchangeToken).toHaveBeenCalledWith('test-code', 'test-verifier');
     });
 
     it('should clear URL params after callback', async () => {
+      // Store code_verifier first
+      await mockStorage.set('authrim:direct:social:code_verifier', 'test-verifier');
+
       Object.defineProperty(window, 'location', {
         value: {
           origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?external_auth=success',
-          search: '?external_auth=success',
+          href: 'https://example.com/callback?code=test-code',
+          search: '?code=test-code',
         },
         writable: true,
       });
@@ -473,12 +479,12 @@ describe('SocialAuthImpl', () => {
       // Wait for state to be stored
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Simulate successful callback message
+      // Simulate successful callback message with authorization code
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
         data: {
           type: 'authrim:social:callback',
-          external_auth: 'success',
+          code: 'test-auth-code',
         },
       });
       window.dispatchEvent(event);
@@ -489,8 +495,9 @@ describe('SocialAuthImpl', () => {
       const result = await promise;
 
       expect(result.success).toBe(true);
-      // Session is set via cookie, so no session/user in result
-      expect(mockExchangeToken).not.toHaveBeenCalled();
+      expect(result.session).toBeDefined();
+      expect(result.user).toBeDefined();
+      expect(mockExchangeToken).toHaveBeenCalled();
 
       // Restore fake timers for other tests
       vi.useFakeTimers();
@@ -534,7 +541,7 @@ describe('SocialAuthImpl', () => {
       vi.useFakeTimers();
     });
 
-    it('should handle popup callback with missing external_auth', async () => {
+    it('should handle popup callback with missing code', async () => {
       // Use real timers for this test to properly handle async message handler
       vi.useRealTimers();
 
@@ -549,7 +556,7 @@ describe('SocialAuthImpl', () => {
       // Wait for state to be stored
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Simulate callback without external_auth
+      // Simulate callback without code
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
         data: {

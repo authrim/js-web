@@ -69,6 +69,7 @@ export class SocialAuthImpl implements SocialAuth {
   private readonly issuer: string;
   private readonly pkce: PKCEHelper;
   private readonly storage: AuthrimStorage;
+  private readonly exchangeToken: SocialAuthOptions["exchangeToken"];
   private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // Popup state
@@ -80,6 +81,7 @@ export class SocialAuthImpl implements SocialAuth {
     this.issuer = options.issuer;
     this.pkce = new PKCEHelper(options.crypto);
     this.storage = options.storage;
+    this.exchangeToken = options.exchangeToken;
 
     // Listen for popup callback messages
     if (typeof window !== "undefined") {
@@ -232,7 +234,7 @@ export class SocialAuthImpl implements SocialAuth {
   async handleCallback(): Promise<AuthResult> {
     // Parse URL parameters
     const params = new URLSearchParams(window.location.search);
-    const externalAuth = params.get("external_auth");
+    const code = params.get("code");
     const error = params.get("error");
     const errorDescription = params.get("error_description");
 
@@ -241,7 +243,7 @@ export class SocialAuthImpl implements SocialAuth {
       reason: "social_callback_received",
       flow: "direct",
       context: {
-        hasExternalAuth: !!externalAuth,
+        hasCode: !!code,
         hasError: !!error,
         error: error || undefined,
         errorDescription: errorDescription || undefined,
@@ -269,16 +271,59 @@ export class SocialAuthImpl implements SocialAuth {
       };
     }
 
-    // External IdP worker callback (session already created)
-    if (externalAuth) {
+    // Check for authorization code
+    if (!code) {
+      this.logDeny("social_callback_invalid", {
+        url: window.location.href,
+      });
+      await this.clearStoredState();
+      return {
+        success: false,
+        error: {
+          error: "invalid_response",
+          error_description: "Missing authorization code",
+          code: "AR004004",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      };
+    }
+
+    // Get stored code_verifier
+    const codeVerifier = await this.storage.get(STORAGE_KEYS.CODE_VERIFIER);
+    if (!codeVerifier) {
+      this.logDeny("social_callback_missing_verifier", {
+        url: window.location.href,
+      });
+      await this.clearStoredState();
+      return {
+        success: false,
+        error: {
+          error: "invalid_request",
+          error_description: "Missing code verifier",
+          code: "AR004005",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      };
+    }
+
+    // Exchange authorization code for session
+    try {
       this.diagnosticLogger?.logAuthDecision({
         decision: "allow",
-        reason: "social_callback_success",
+        reason: "social_callback_exchanging_token",
         flow: "direct",
         context: {
-          externalAuth,
+          code: code.substring(0, 8) + "...", // Log only prefix for security
         },
       });
+
+      const result = await this.exchangeToken(code, codeVerifier);
 
       // Clear stored state
       await this.clearStoredState();
@@ -286,32 +331,40 @@ export class SocialAuthImpl implements SocialAuth {
       // Clear URL parameters (optional, for cleaner UX)
       this.clearUrlParams();
 
-      // Session is already set via cookie, no need to exchange token
-      // Return success (session and user will be fetched separately)
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "allow",
+        reason: "social_callback_success",
+        flow: "direct",
+        context: {
+          hasSession: !!result.session,
+          hasUser: !!result.user,
+        },
+      });
+
       return {
         success: true,
-        // Note: session and user are not included here
-        // They will be fetched via separate API call if needed
+        session: result.session,
+        user: result.user,
+      };
+    } catch (error) {
+      this.logDeny("social_token_exchange_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await this.clearStoredState();
+      return {
+        success: false,
+        error: {
+          error: "token_exchange_failed",
+          error_description:
+            error instanceof Error ? error.message : "Token exchange failed",
+          code: "AR004006",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
       };
     }
-
-    // Fallback: Invalid callback (no external_auth parameter and no error)
-    this.logDeny("social_callback_invalid", {
-      url: window.location.href,
-    });
-    await this.clearStoredState();
-    return {
-      success: false,
-      error: {
-        error: "invalid_response",
-        error_description: "Missing callback parameters",
-        code: "AR004004",
-        meta: {
-          retryable: false,
-          severity: "error",
-        },
-      },
-    };
   }
 
   /**
@@ -319,7 +372,7 @@ export class SocialAuthImpl implements SocialAuth {
    */
   hasCallbackParams(): boolean {
     const params = new URLSearchParams(window.location.search);
-    return params.has("external_auth") || params.has("error");
+    return params.has("code") || params.has("error");
   }
 
   /**
@@ -357,6 +410,8 @@ export class SocialAuthImpl implements SocialAuth {
   ): string {
     const params = new URLSearchParams({
       redirect_uri: options.redirectUri,
+      code_challenge: options.codeChallenge,
+      code_challenge_method: "S256",
     });
 
     if (options.loginHint) {
@@ -419,7 +474,7 @@ export class SocialAuthImpl implements SocialAuth {
     // Check if this is an auth callback message
     const data = event.data as {
       type?: string;
-      external_auth?: string;
+      code?: string;
       error?: string;
       error_description?: string;
     };
@@ -460,13 +515,13 @@ export class SocialAuthImpl implements SocialAuth {
       return;
     }
 
-    if (!data.external_auth) {
+    if (!data.code) {
       this.logDeny("social_callback_invalid_response");
       resolve({
         success: false,
         error: {
           error: "invalid_response",
-          error_description: "Missing callback parameters",
+          error_description: "Missing authorization code",
           code: "AR004004",
           meta: {
             retryable: false,
@@ -478,14 +533,55 @@ export class SocialAuthImpl implements SocialAuth {
       return;
     }
 
-    // External IdP worker callback - session already created via cookie
-    await this.clearStoredState();
+    // Get stored code_verifier
+    const codeVerifier = await this.storage.get(STORAGE_KEYS.CODE_VERIFIER);
+    if (!codeVerifier) {
+      this.logDeny("social_callback_missing_verifier");
+      resolve({
+        success: false,
+        error: {
+          error: "invalid_request",
+          error_description: "Missing code verifier",
+          code: "AR004005",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      });
+      await this.clearStoredState();
+      return;
+    }
 
-    resolve({
-      success: true,
-      // Note: session and user are not included here
-      // They will be fetched via separate API call if needed
-    });
+    // Exchange authorization code for session
+    try {
+      const result = await this.exchangeToken(data.code, codeVerifier);
+      await this.clearStoredState();
+
+      resolve({
+        success: true,
+        session: result.session,
+        user: result.user,
+      });
+    } catch (error) {
+      this.logDeny("social_token_exchange_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await this.clearStoredState();
+      resolve({
+        success: false,
+        error: {
+          error: "token_exchange_failed",
+          error_description:
+            error instanceof Error ? error.message : "Token exchange failed",
+          code: "AR004006",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      });
+    }
   }
 
   /**
@@ -519,7 +615,7 @@ export class SocialAuthImpl implements SocialAuth {
    */
   private clearUrlParams(): void {
     const url = new URL(window.location.href);
-    url.searchParams.delete("external_auth");
+    url.searchParams.delete("code");
     url.searchParams.delete("error");
     url.searchParams.delete("error_description");
     window.history.replaceState({}, "", url.toString());
