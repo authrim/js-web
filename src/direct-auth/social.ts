@@ -196,6 +196,17 @@ export class SocialAuthImpl implements SocialAuth {
     const redirectUri =
       options?.redirectUri || window.location.href.split("?")[0];
 
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "allow",
+      reason: "social_redirect_initiated",
+      flow: "direct",
+      context: {
+        provider,
+        redirectUri,
+        hasLoginHint: !!options?.loginHint,
+      },
+    });
+
     // Store state for callback verification
     await this.storage.set(STORAGE_KEYS.STATE, state);
     await this.storage.set(STORAGE_KEYS.CODE_VERIFIER, codeVerifier);
@@ -225,8 +236,24 @@ export class SocialAuthImpl implements SocialAuth {
     const error = params.get("error");
     const errorDescription = params.get("error_description");
 
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "allow",
+      reason: "social_callback_received",
+      flow: "direct",
+      context: {
+        hasExternalAuth: !!externalAuth,
+        hasError: !!error,
+        error: error || undefined,
+        errorDescription: errorDescription || undefined,
+      },
+    });
+
     // Check for errors
     if (error) {
+      this.logDeny("social_callback_error", {
+        error,
+        errorDescription: errorDescription || undefined,
+      });
       await this.clearStoredState();
       return {
         success: false,
@@ -244,6 +271,15 @@ export class SocialAuthImpl implements SocialAuth {
 
     // External IdP worker callback (session already created)
     if (externalAuth) {
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "allow",
+        reason: "social_callback_success",
+        flow: "direct",
+        context: {
+          externalAuth,
+        },
+      });
+
       // Clear stored state
       await this.clearStoredState();
 
@@ -260,6 +296,9 @@ export class SocialAuthImpl implements SocialAuth {
     }
 
     // Fallback: Invalid callback (no external_auth parameter and no error)
+    this.logDeny("social_callback_invalid", {
+      url: window.location.href,
+    });
     await this.clearStoredState();
     return {
       success: false,
