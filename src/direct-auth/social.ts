@@ -394,7 +394,7 @@ export class SocialAuthImpl implements SocialAuth {
       params.set("login_hint", options.loginHint);
     }
 
-    return `${this.issuer}/api/v1/auth/authorize?${params.toString()}`;
+    return `${this.issuer}/authorize?${params.toString()}`;
   }
 
   /**
