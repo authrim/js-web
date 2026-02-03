@@ -204,6 +204,7 @@ export interface DirectAuthTokenRequest {
   code: string;
   client_id: string;
   code_verifier: string;
+  provider_id?: string;
   request_refresh_token?: boolean;
 }
 

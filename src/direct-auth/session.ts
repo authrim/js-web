@@ -269,6 +269,7 @@ export class SessionAuthImpl implements SessionAuth {
     authCode: string,
     codeVerifier: string,
     requestRefreshToken?: boolean,
+    providerId?: string,
   ): Promise<{ session?: Session; user?: User }> {
     const request: DirectAuthTokenRequest = {
       grant_type: "authorization_code",
@@ -277,6 +278,9 @@ export class SessionAuthImpl implements SessionAuth {
       code_verifier: codeVerifier,
       request_refresh_token: requestRefreshToken,
     };
+    if (providerId) {
+      request.provider_id = providerId;
+    }
 
     let response;
     try {

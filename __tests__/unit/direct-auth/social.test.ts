@@ -364,6 +364,7 @@ describe('SocialAuthImpl', () => {
     it('should successfully handle External IdP callback', async () => {
       // Store code_verifier first
       await mockStorage.set('authrim:direct:social:code_verifier', 'test-verifier');
+      await mockStorage.set('authrim:direct:social:provider', 'google');
 
       Object.defineProperty(window, 'location', {
         value: {
@@ -379,12 +380,17 @@ describe('SocialAuthImpl', () => {
       expect(result.success).toBe(true);
       expect(result.session).toBeDefined();
       expect(result.user).toBeDefined();
-      expect(mockExchangeToken).toHaveBeenCalledWith('test-code', 'test-verifier');
+      expect(mockExchangeToken).toHaveBeenCalledWith(
+        'test-code',
+        'test-verifier',
+        'google',
+      );
     });
 
     it('should clear URL params after callback', async () => {
       // Store code_verifier first
       await mockStorage.set('authrim:direct:social:code_verifier', 'test-verifier');
+      await mockStorage.set('authrim:direct:social:provider', 'google');
 
       Object.defineProperty(window, 'location', {
         value: {
@@ -497,7 +503,11 @@ describe('SocialAuthImpl', () => {
       expect(result.success).toBe(true);
       expect(result.session).toBeDefined();
       expect(result.user).toBeDefined();
-      expect(mockExchangeToken).toHaveBeenCalled();
+      expect(mockExchangeToken).toHaveBeenCalledWith(
+        'test-auth-code',
+        expect.any(String),
+        'google',
+      );
 
       // Restore fake timers for other tests
       vi.useFakeTimers();

@@ -144,8 +144,12 @@ export function createDirectAuthClient(
   });
 
   // Token exchange callback
-  const exchangeToken = async (authCode: string, codeVerifier: string) => {
-    return sessionManager.exchangeToken(authCode, codeVerifier);
+  const exchangeToken = async (
+    authCode: string,
+    codeVerifier: string,
+    providerId?: string,
+  ) => {
+    return sessionManager.exchangeToken(authCode, codeVerifier, undefined, providerId);
   };
 
   // Create auth implementations

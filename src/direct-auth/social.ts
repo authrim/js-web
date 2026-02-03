@@ -46,6 +46,7 @@ export interface SocialAuthOptions {
   exchangeToken: (
     authCode: string,
     codeVerifier: string,
+    providerId?: string,
   ) => Promise<{
     session?: Session;
     user?: User;
@@ -67,6 +68,7 @@ interface PopupFeatures {
  */
 export class SocialAuthImpl implements SocialAuth {
   private readonly issuer: string;
+  private readonly clientId: string;
   private readonly pkce: PKCEHelper;
   private readonly storage: AuthrimStorage;
   private readonly exchangeToken: SocialAuthOptions["exchangeToken"];
@@ -79,6 +81,7 @@ export class SocialAuthImpl implements SocialAuth {
 
   constructor(options: SocialAuthOptions) {
     this.issuer = options.issuer;
+    this.clientId = options.clientId;
     this.pkce = new PKCEHelper(options.crypto);
     this.storage = options.storage;
     this.exchangeToken = options.exchangeToken;
@@ -312,6 +315,26 @@ export class SocialAuthImpl implements SocialAuth {
       };
     }
 
+    const providerId = await this.storage.get(STORAGE_KEYS.PROVIDER);
+    if (!providerId) {
+      this.logDeny("social_callback_missing_provider", {
+        url: window.location.href,
+      });
+      await this.clearStoredState();
+      return {
+        success: false,
+        error: {
+          error: "invalid_request",
+          error_description: "Missing provider",
+          code: "AR004005",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      };
+    }
+
     // Exchange authorization code for session
     try {
       this.diagnosticLogger?.logAuthDecision({
@@ -323,7 +346,7 @@ export class SocialAuthImpl implements SocialAuth {
         },
       });
 
-      const result = await this.exchangeToken(code, codeVerifier);
+      const result = await this.exchangeToken(code, codeVerifier, providerId);
 
       // Clear stored state
       await this.clearStoredState();
@@ -412,6 +435,7 @@ export class SocialAuthImpl implements SocialAuth {
       redirect_uri: options.redirectUri,
       code_challenge: options.codeChallenge,
       code_challenge_method: "S256",
+      client_id: this.clientId,
     });
 
     if (options.loginHint) {
@@ -553,9 +577,28 @@ export class SocialAuthImpl implements SocialAuth {
       return;
     }
 
+    const providerId = await this.storage.get(STORAGE_KEYS.PROVIDER);
+    if (!providerId) {
+      this.logDeny("social_callback_missing_provider");
+      resolve({
+        success: false,
+        error: {
+          error: "invalid_request",
+          error_description: "Missing provider",
+          code: "AR004005",
+          meta: {
+            retryable: false,
+            severity: "error",
+          },
+        },
+      });
+      await this.clearStoredState();
+      return;
+    }
+
     // Exchange authorization code for session
     try {
-      const result = await this.exchangeToken(data.code, codeVerifier);
+      const result = await this.exchangeToken(data.code, codeVerifier, providerId);
       await this.clearStoredState();
 
       resolve({
