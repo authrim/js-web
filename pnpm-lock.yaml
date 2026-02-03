@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@authrim/core':
-        specifier: ^0.1.12
-        version: 0.1.12
+        specifier: ^0.1.14
+        version: 0.1.14
     devDependencies:
       '@types/jsdom':
         specifier: ^27.0.0
@@ -51,8 +51,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@authrim/core@0.1.12':
-    resolution: {integrity: sha512-sK15s0Z+XnvpbvDNgzl8zwbL2dZdeA03yKF7iUhoAMaru1U6RUteQtV5/jG8h9m9q6IA0pbbpMj2muAGc+XlJw==}
+  '@authrim/core@0.1.14':
+    resolution: {integrity: sha512-fvu9mFd6DrOM3BPehA8hKNcmoGwg/mR2BPESfHsFuQEEESUViKuXqKSY7hB+bTV7S/m9E/Hy4/wwq1OjgPzWUw==}
     engines: {node: '>=18'}
 
   '@csstools/color-helpers@5.1.0':
@@ -1515,7 +1515,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@authrim/core@0.1.12': {}
+  '@authrim/core@0.1.14': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
