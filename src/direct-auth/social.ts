@@ -8,7 +8,6 @@
  */
 
 import {
-  AuthrimError,
   PKCEHelper,
   type IDiagnosticLogger,
   type CryptoProvider,
@@ -20,7 +19,6 @@ import {
   type Session,
   type User,
 } from "@authrim/core";
-import { getAuthrimCode, mapSeverity } from "../utils/error-mapping.js";
 
 /**
  * Storage keys for social login state
@@ -69,10 +67,8 @@ interface PopupFeatures {
  */
 export class SocialAuthImpl implements SocialAuth {
   private readonly issuer: string;
-  private readonly clientId: string;
   private readonly pkce: PKCEHelper;
   private readonly storage: AuthrimStorage;
-  private readonly exchangeToken: SocialAuthOptions["exchangeToken"];
   private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // Popup state
@@ -82,10 +78,8 @@ export class SocialAuthImpl implements SocialAuth {
 
   constructor(options: SocialAuthOptions) {
     this.issuer = options.issuer;
-    this.clientId = options.clientId;
     this.pkce = new PKCEHelper(options.crypto);
     this.storage = options.storage;
-    this.exchangeToken = options.exchangeToken;
 
     // Listen for popup callback messages
     if (typeof window !== "undefined") {
