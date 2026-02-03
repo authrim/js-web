@@ -176,7 +176,7 @@ describe('SocialAuthImpl', () => {
       await vi.advanceTimersByTimeAsync(50);
 
       expect(window.open).toHaveBeenCalledWith(
-        expect.stringContaining('https://auth.example.com/authorize'),
+        expect.stringContaining('https://auth.example.com/api/v1/auth/authorize'),
         'authrim_social_popup',
         expect.any(String)
       );
@@ -299,7 +299,7 @@ describe('SocialAuthImpl', () => {
     it('should redirect to authorization URL', async () => {
       await social.loginWithRedirect('google');
 
-      expect(mockLocation.href).toContain('https://auth.example.com/authorize');
+      expect(mockLocation.href).toContain('https://auth.example.com/api/v1/auth/authorize');
       expect(mockLocation.href).toContain('provider=google');
     });
 

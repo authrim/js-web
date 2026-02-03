@@ -10,6 +10,7 @@
 import {
   AuthrimError,
   PKCEHelper,
+  type IDiagnosticLogger,
   type CryptoProvider,
   type AuthrimStorage,
   type SocialAuth,
@@ -72,6 +73,7 @@ export class SocialAuthImpl implements SocialAuth {
   private readonly pkce: PKCEHelper;
   private readonly storage: AuthrimStorage;
   private readonly exchangeToken: SocialAuthOptions["exchangeToken"];
+  private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // Popup state
   private popupWindow: Window | null = null;
@@ -89,6 +91,19 @@ export class SocialAuthImpl implements SocialAuth {
     if (typeof window !== "undefined") {
       window.addEventListener("message", this.handlePopupMessage.bind(this));
     }
+  }
+
+  setDiagnosticLogger(logger: IDiagnosticLogger | null): void {
+    this.diagnosticLogger = logger;
+  }
+
+  private logDeny(reason: string, context?: Record<string, unknown>): void {
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "deny",
+      reason,
+      flow: "direct",
+      context,
+    });
   }
 
   /**
@@ -121,6 +136,7 @@ export class SocialAuthImpl implements SocialAuth {
     );
 
     if (!popup) {
+      this.logDeny("social_popup_blocked", { provider });
       return {
         success: false,
         error: {
@@ -152,6 +168,7 @@ export class SocialAuthImpl implements SocialAuth {
       this.popupCheckInterval = window.setInterval(() => {
         if (popup.closed) {
           this.cleanupPopup();
+          this.logDeny("social_popup_closed", { provider });
           resolve({
             success: false,
             error: {
@@ -396,7 +413,7 @@ export class SocialAuthImpl implements SocialAuth {
       params.set("login_hint", options.loginHint);
     }
 
-    return `${this.issuer}/authorize?${params.toString()}`;
+    return `${this.issuer}/api/v1/auth/authorize?${params.toString()}`;
   }
 
   /**
@@ -473,6 +490,11 @@ export class SocialAuthImpl implements SocialAuth {
 
     // Process callback
     if (data.error) {
+      this.logDeny("social_callback_error", {
+        provider: data.error,
+        error: data.error,
+        error_description: data.error_description,
+      });
       resolve({
         success: false,
         error: {
@@ -490,6 +512,7 @@ export class SocialAuthImpl implements SocialAuth {
     }
 
     if (!data.code || !data.state) {
+      this.logDeny("social_callback_invalid_response");
       resolve({
         success: false,
         error: {
@@ -511,6 +534,7 @@ export class SocialAuthImpl implements SocialAuth {
     const codeVerifier = await this.storage.get(STORAGE_KEYS.CODE_VERIFIER);
 
     if (data.state !== storedState) {
+      this.logDeny("social_state_mismatch");
       resolve({
         success: false,
         error: {

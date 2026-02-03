@@ -10,6 +10,7 @@
 import {
   AuthrimError,
   PKCEHelper,
+  type IDiagnosticLogger,
   type HttpClient,
   type CryptoProvider,
   type PasskeyAuth,
@@ -81,6 +82,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
   private readonly http: HttpClient;
   private readonly pkce: PKCEHelper;
   private readonly exchangeToken: PasskeyAuthOptions["exchangeToken"];
+  private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // Conditional UI abort controller
   private conditionalAbortController: AbortController | null = null;
@@ -91,6 +93,19 @@ export class PasskeyAuthImpl implements PasskeyAuth {
     this.http = options.http;
     this.pkce = new PKCEHelper(options.crypto);
     this.exchangeToken = options.exchangeToken;
+  }
+
+  setDiagnosticLogger(logger: IDiagnosticLogger | null): void {
+    this.diagnosticLogger = logger;
+  }
+
+  private logDeny(reason: string, context?: Record<string, unknown>): void {
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "deny",
+      reason,
+      flow: "direct",
+      context,
+    });
   }
 
   /**
@@ -128,6 +143,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
    */
   async login(options?: PasskeyLoginOptions): Promise<AuthResult> {
     if (!this.isSupported()) {
+      this.logDeny("passkey_not_supported");
       return {
         success: false,
         error: {
@@ -204,6 +220,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
       } catch (error) {
         if (error instanceof Error) {
           if (error.name === "AbortError") {
+            this.logDeny("passkey_cancelled");
             return {
               success: false,
               error: {
@@ -218,6 +235,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
             };
           }
           if (error.name === "NotAllowedError") {
+            this.logDeny("passkey_cancelled");
             return {
               success: false,
               error: {
@@ -240,6 +258,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
       }
 
       if (!credential) {
+        this.logDeny("passkey_not_found");
         return {
           success: false,
           error: {
@@ -295,6 +314,9 @@ export class PasskeyAuthImpl implements PasskeyAuth {
     } catch (error) {
       // P2: エラー時も codeVerifier をクリア
       codeVerifier = "";
+      this.logDeny("passkey_login_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
 
       if (error instanceof AuthrimError) {
         return {
@@ -332,6 +354,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
    */
   async signUp(options: PasskeySignUpOptions): Promise<AuthResult> {
     if (!this.isSupported()) {
+      this.logDeny("passkey_not_supported");
       return {
         success: false,
         error: {
@@ -405,6 +428,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
       } catch (error) {
         if (error instanceof Error) {
           if (error.name === "AbortError" || error.name === "NotAllowedError") {
+            this.logDeny("passkey_cancelled");
             return {
               success: false,
               error: {
@@ -423,6 +447,7 @@ export class PasskeyAuthImpl implements PasskeyAuth {
       }
 
       if (!credential) {
+        this.logDeny("passkey_invalid_credential");
         return {
           success: false,
           error: {
@@ -478,6 +503,9 @@ export class PasskeyAuthImpl implements PasskeyAuth {
     } catch (error) {
       // P2: エラー時も codeVerifier をクリア
       codeVerifier = "";
+      this.logDeny("passkey_signup_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
 
       if (error instanceof AuthrimError) {
         return {

@@ -418,6 +418,9 @@ export async function createAuthrim<T extends AuthrimConfig>(
     on,
     setDiagnosticLogger(logger: IDiagnosticLogger | null) {
       sessionManager.setDiagnosticLogger(logger);
+      passkeyImpl.setDiagnosticLogger(logger);
+      emailCodeImpl.setDiagnosticLogger(logger);
+      socialImpl.setDiagnosticLogger(logger);
     },
   };
 

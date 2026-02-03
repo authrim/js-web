@@ -10,6 +10,7 @@
 import {
   AuthrimError,
   PKCEHelper,
+  type IDiagnosticLogger,
   type HttpClient,
   type CryptoProvider,
   type EmailCodeAuth,
@@ -80,6 +81,7 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
   private readonly http: HttpClient;
   private readonly pkce: PKCEHelper;
   private readonly exchangeToken: EmailCodeAuthOptions["exchangeToken"];
+  private diagnosticLogger: IDiagnosticLogger | null = null;
 
   // State for pending verifications (keyed by email)
   private pendingVerifications: Map<string, EmailCodeState> = new Map();
@@ -96,6 +98,19 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
 
     // P0: 定期的なクリーンアップを開始
     this.startCleanupTimer();
+  }
+
+  setDiagnosticLogger(logger: IDiagnosticLogger | null): void {
+    this.diagnosticLogger = logger;
+  }
+
+  private logDeny(reason: string, context?: Record<string, unknown>): void {
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "deny",
+      reason,
+      flow: "direct",
+      context,
+    });
   }
 
   /**
@@ -211,6 +226,7 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
   ): Promise<AuthResult> {
     // Validate code format (6-8 digits)
     if (!/^\d{6,8}$/.test(code)) {
+      this.logDeny("email_code_invalid");
       return {
         success: false,
         error: {
@@ -230,6 +246,7 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
     const state = this.pendingVerifications.get(email.toLowerCase());
 
     if (!state) {
+      this.logDeny("challenge_invalid");
       return {
         success: false,
         error: {
@@ -248,6 +265,7 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
     // Check if expired
     if (Date.now() > state.expiresAt) {
       this.pendingVerifications.delete(email.toLowerCase());
+      this.logDeny("email_code_expired");
       return {
         success: false,
         error: {
@@ -290,6 +308,7 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
           };
 
           if (errorData?.error === "invalid_code") {
+            this.logDeny("email_code_invalid");
             return {
               success: false,
               error: {
@@ -359,6 +378,9 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
         user,
       };
     } catch (error) {
+      this.logDeny("email_code_verify_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
       if (error instanceof AuthrimError) {
         return {
           success: false,
