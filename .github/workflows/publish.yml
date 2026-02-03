@@ -43,9 +43,6 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Debug social test expectations
-        run: sed -n '170,185p' __tests__/unit/direct-auth/social.test.ts
-
       - name: Typecheck
         run: pnpm typecheck
 

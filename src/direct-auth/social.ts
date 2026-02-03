@@ -386,9 +386,11 @@ export class SocialAuthImpl implements SocialAuth {
       provider,
     });
 
-    if (options.scopes && options.scopes.length > 0) {
-      params.set("scope", options.scopes.join(" "));
-    }
+    const scopes =
+      options.scopes && options.scopes.length > 0
+        ? options.scopes
+        : ["openid", "profile", "email"];
+    params.set("scope", scopes.join(" "));
 
     if (options.loginHint) {
       params.set("login_hint", options.loginHint);
