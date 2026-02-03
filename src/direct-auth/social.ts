@@ -227,8 +227,7 @@ export class SocialAuthImpl implements SocialAuth {
   async handleCallback(): Promise<AuthResult> {
     // Parse URL parameters
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
+    const externalAuth = params.get("external_auth");
     const error = params.get("error");
     const errorDescription = params.get("error_description");
 
@@ -249,107 +248,37 @@ export class SocialAuthImpl implements SocialAuth {
       };
     }
 
-    // Validate required parameters
-    if (!code || !state) {
-      await this.clearStoredState();
-      return {
-        success: false,
-        error: {
-          error: "invalid_response",
-          error_description: "Missing authorization code or state parameter",
-          code: "AR004004",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      };
-    }
-
-    // Retrieve stored state
-    const storedState = await this.storage.get(STORAGE_KEYS.STATE);
-    const codeVerifier = await this.storage.get(STORAGE_KEYS.CODE_VERIFIER);
-
-    // Validate state
-    if (state !== storedState) {
-      await this.clearStoredState();
-      return {
-        success: false,
-        error: {
-          error: "state_mismatch",
-          error_description: "State parameter mismatch. Please try again.",
-          code: "AR004005",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      };
-    }
-
-    if (!codeVerifier) {
-      await this.clearStoredState();
-      return {
-        success: false,
-        error: {
-          error: "invalid_state",
-          error_description: "No code verifier found. Please try again.",
-          code: "AR004006",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      };
-    }
-
-    try {
-      // Exchange code for session
-      const { session, user } = await this.exchangeToken(code, codeVerifier);
-
+    // External IdP worker callback (session already created)
+    if (externalAuth) {
       // Clear stored state
       await this.clearStoredState();
 
       // Clear URL parameters (optional, for cleaner UX)
       this.clearUrlParams();
 
+      // Session is already set via cookie, no need to exchange token
+      // Return success (session and user will be fetched separately)
       return {
         success: true,
-        session,
-        user,
-      };
-    } catch (error) {
-      await this.clearStoredState();
-
-      if (error instanceof AuthrimError) {
-        return {
-          success: false,
-          error: {
-            error: error.code,
-            error_description: error.message,
-            code: getAuthrimCode(error.code, "AR004000"),
-            meta: {
-              retryable: error.meta.retryable,
-              severity: mapSeverity(error.meta.severity),
-            },
-          },
-        };
-      }
-
-      return {
-        success: false,
-        error: {
-          error: "token_error",
-          error_description:
-            error instanceof Error ? error.message : "Failed to exchange token",
-          code: "AR004007",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
+        // Note: session and user are not included here
+        // They will be fetched via separate API call if needed
       };
     }
+
+    // Fallback: Invalid callback (no external_auth parameter and no error)
+    await this.clearStoredState();
+    return {
+      success: false,
+      error: {
+        error: "invalid_response",
+        error_description: "Missing callback parameters",
+        code: "AR004004",
+        meta: {
+          retryable: false,
+          severity: "error",
+        },
+      },
+    };
   }
 
   /**
@@ -357,7 +286,7 @@ export class SocialAuthImpl implements SocialAuth {
    */
   hasCallbackParams(): boolean {
     const params = new URLSearchParams(window.location.search);
-    return params.has("code") || params.has("error");
+    return params.has("external_auth") || params.has("error");
   }
 
   /**
@@ -394,26 +323,14 @@ export class SocialAuthImpl implements SocialAuth {
     },
   ): string {
     const params = new URLSearchParams({
-      response_type: "code",
-      client_id: this.clientId,
       redirect_uri: options.redirectUri,
-      state: options.state,
-      code_challenge: options.codeChallenge,
-      code_challenge_method: "S256",
-      provider,
     });
-
-    const scopes =
-      options.scopes && options.scopes.length > 0
-        ? options.scopes
-        : ["openid", "profile", "email"];
-    params.set("scope", scopes.join(" "));
 
     if (options.loginHint) {
       params.set("login_hint", options.loginHint);
     }
 
-    return `${this.issuer}/api/v1/auth/authorize?${params.toString()}`;
+    return `${this.issuer}/auth/external/${provider}/start?${params.toString()}`;
   }
 
   /**
@@ -469,8 +386,7 @@ export class SocialAuthImpl implements SocialAuth {
     // Check if this is an auth callback message
     const data = event.data as {
       type?: string;
-      code?: string;
-      state?: string;
+      external_auth?: string;
       error?: string;
       error_description?: string;
     };
@@ -511,13 +427,13 @@ export class SocialAuthImpl implements SocialAuth {
       return;
     }
 
-    if (!data.code || !data.state) {
+    if (!data.external_auth) {
       this.logDeny("social_callback_invalid_response");
       resolve({
         success: false,
         error: {
           error: "invalid_response",
-          error_description: "Missing authorization code or state",
+          error_description: "Missing callback parameters",
           code: "AR004004",
           meta: {
             retryable: false,
@@ -529,76 +445,14 @@ export class SocialAuthImpl implements SocialAuth {
       return;
     }
 
-    // Validate state
-    const storedState = await this.storage.get(STORAGE_KEYS.STATE);
-    const codeVerifier = await this.storage.get(STORAGE_KEYS.CODE_VERIFIER);
+    // External IdP worker callback - session already created via cookie
+    await this.clearStoredState();
 
-    if (data.state !== storedState) {
-      this.logDeny("social_state_mismatch");
-      resolve({
-        success: false,
-        error: {
-          error: "state_mismatch",
-          error_description: "State parameter mismatch",
-          code: "AR004005",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      });
-      await this.clearStoredState();
-      return;
-    }
-
-    if (!codeVerifier) {
-      resolve({
-        success: false,
-        error: {
-          error: "invalid_state",
-          error_description: "No code verifier found",
-          code: "AR004006",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      });
-      await this.clearStoredState();
-      return;
-    }
-
-    try {
-      // Exchange code for session
-      const { session, user } = await this.exchangeToken(
-        data.code,
-        codeVerifier,
-      );
-
-      await this.clearStoredState();
-
-      resolve({
-        success: true,
-        session,
-        user,
-      });
-    } catch (error) {
-      await this.clearStoredState();
-
-      resolve({
-        success: false,
-        error: {
-          error: "token_error",
-          error_description:
-            error instanceof Error ? error.message : "Failed to exchange token",
-          code: "AR004007",
-          meta: {
-            retryable: false,
-            severity: "error",
-          },
-        },
-      });
-    }
+    resolve({
+      success: true,
+      // Note: session and user are not included here
+      // They will be fetched via separate API call if needed
+    });
   }
 
   /**
@@ -632,8 +486,7 @@ export class SocialAuthImpl implements SocialAuth {
    */
   private clearUrlParams(): void {
     const url = new URL(window.location.href);
-    url.searchParams.delete("code");
-    url.searchParams.delete("state");
+    url.searchParams.delete("external_auth");
     url.searchParams.delete("error");
     url.searchParams.delete("error_description");
     window.history.replaceState({}, "", url.toString());

@@ -114,11 +114,11 @@ describe('SocialAuthImpl', () => {
   });
 
   describe('hasCallbackParams', () => {
-    it('should return true when code param is present', () => {
+    it('should return true when external_auth param is present', () => {
       Object.defineProperty(window, 'location', {
         value: {
           ...window.location,
-          search: '?code=abc123&state=xyz',
+          search: '?external_auth=success',
         },
         writable: true,
       });
@@ -176,7 +176,7 @@ describe('SocialAuthImpl', () => {
       await vi.advanceTimersByTimeAsync(50);
 
       expect(window.open).toHaveBeenCalledWith(
-        expect.stringContaining('https://auth.example.com/api/v1/auth/authorize'),
+        expect.stringContaining('https://auth.example.com/auth/external/google/start'),
         'authrim_social_popup',
         expect.any(String)
       );
@@ -184,10 +184,7 @@ describe('SocialAuthImpl', () => {
       // Verify URL contains expected parameters
       const callArgs = vi.mocked(window.open).mock.calls[0];
       const url = callArgs[0] as string;
-      expect(url).toContain('provider=google');
-      expect(url).toContain('response_type=code');
-      expect(url).toContain('client_id=test-client-id');
-      expect(url).toContain('code_challenge_method=S256');
+      expect(url).toContain('redirect_uri=');
 
       // Close popup to end the test
       mockPopup.closed = true;
@@ -252,7 +249,7 @@ describe('SocialAuthImpl', () => {
       expect(result.error?.code).toBe('AR004002');
     });
 
-    it('should include custom options in URL', async () => {
+    it('should include login_hint in URL', async () => {
       const mockPopup = {
         closed: false,
         close: vi.fn(),
@@ -260,7 +257,6 @@ describe('SocialAuthImpl', () => {
       vi.mocked(window.open).mockReturnValue(mockPopup as unknown as Window);
 
       const promise = social.loginWithPopup('google', {
-        scopes: ['email', 'profile'],
         loginHint: 'user@example.com',
       });
 
@@ -269,7 +265,6 @@ describe('SocialAuthImpl', () => {
 
       const callArgs = vi.mocked(window.open).mock.calls[0];
       const url = callArgs[0] as string;
-      expect(url).toContain('scope=email+profile');
       expect(url).toContain('login_hint=user%40example.com');
 
       // Close popup to end the test
@@ -296,11 +291,11 @@ describe('SocialAuthImpl', () => {
       window.location = mockLocation as unknown as Location;
     });
 
-    it('should redirect to authorization URL', async () => {
+    it('should redirect to External IdP start URL', async () => {
       await social.loginWithRedirect('google');
 
-      expect(mockLocation.href).toContain('https://auth.example.com/api/v1/auth/authorize');
-      expect(mockLocation.href).toContain('provider=google');
+      expect(mockLocation.href).toContain('https://auth.example.com/auth/external/google/start');
+      expect(mockLocation.href).toContain('redirect_uri=');
     });
 
     it('should store state for later verification', async () => {
@@ -334,14 +329,6 @@ describe('SocialAuthImpl', () => {
   });
 
   describe('handleCallback', () => {
-    beforeEach(async () => {
-      // Setup stored state
-      const state = 'stored-state-123';
-      const codeVerifier = 'stored-verifier-123';
-      await mockStorage.set('authrim:direct:social:state', state);
-      await mockStorage.set('authrim:direct:social:code_verifier', codeVerifier);
-    });
-
     it('should return error when error param is present', async () => {
       Object.defineProperty(window, 'location', {
         value: {
@@ -358,11 +345,11 @@ describe('SocialAuthImpl', () => {
       expect(result.error?.error_description).toBe('User cancelled');
     });
 
-    it('should return error when code or state is missing', async () => {
+    it('should return error when external_auth param is missing', async () => {
       Object.defineProperty(window, 'location', {
         value: {
           ...window.location,
-          search: '?code=abc123', // No state
+          search: '', // No params
         },
         writable: true,
       });
@@ -374,47 +361,12 @@ describe('SocialAuthImpl', () => {
       expect(result.error?.code).toBe('AR004004');
     });
 
-    it('should return error when state does not match', async () => {
-      Object.defineProperty(window, 'location', {
-        value: {
-          ...window.location,
-          search: '?code=abc123&state=wrong-state',
-        },
-        writable: true,
-      });
-
-      const result = await social.handleCallback();
-
-      expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('state_mismatch');
-      expect(result.error?.code).toBe('AR004005');
-    });
-
-    it('should return error when code verifier is missing', async () => {
-      // Clear code verifier
-      await mockStorage.remove('authrim:direct:social:code_verifier');
-
-      Object.defineProperty(window, 'location', {
-        value: {
-          ...window.location,
-          search: '?code=abc123&state=stored-state-123',
-        },
-        writable: true,
-      });
-
-      const result = await social.handleCallback();
-
-      expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('invalid_state');
-      expect(result.error?.code).toBe('AR004006');
-    });
-
-    it('should successfully exchange code for session', async () => {
+    it('should successfully handle External IdP callback', async () => {
       Object.defineProperty(window, 'location', {
         value: {
           origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?code=abc123&state=stored-state-123',
-          search: '?code=abc123&state=stored-state-123',
+          href: 'https://example.com/callback?external_auth=success',
+          search: '?external_auth=success',
         },
         writable: true,
       });
@@ -422,54 +374,17 @@ describe('SocialAuthImpl', () => {
       const result = await social.handleCallback();
 
       expect(result.success).toBe(true);
-      expect(result.session).toBeDefined();
-      expect(result.user).toBeDefined();
-      expect(mockExchangeToken).toHaveBeenCalledWith('abc123', 'stored-verifier-123');
-    });
-
-    it('should clear stored state after successful callback', async () => {
-      Object.defineProperty(window, 'location', {
-        value: {
-          origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?code=abc123&state=stored-state-123',
-          search: '?code=abc123&state=stored-state-123',
-        },
-        writable: true,
-      });
-
-      await social.handleCallback();
-
-      expect(mockStorage.remove).toHaveBeenCalledWith('authrim:direct:social:state');
-      expect(mockStorage.remove).toHaveBeenCalledWith('authrim:direct:social:code_verifier');
-      expect(mockStorage.remove).toHaveBeenCalledWith('authrim:direct:social:provider');
-      expect(mockStorage.remove).toHaveBeenCalledWith('authrim:direct:social:redirect_uri');
-    });
-
-    it('should handle token exchange error', async () => {
-      mockExchangeToken.mockRejectedValue(new Error('Token exchange failed'));
-
-      Object.defineProperty(window, 'location', {
-        value: {
-          origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?code=abc123&state=stored-state-123',
-          search: '?code=abc123&state=stored-state-123',
-        },
-        writable: true,
-      });
-
-      const result = await social.handleCallback();
-
-      expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('token_error');
-      expect(result.error?.code).toBe('AR004007');
+      // Session is set via cookie by External IdP worker
+      // No token exchange needed
+      expect(mockExchangeToken).not.toHaveBeenCalled();
     });
 
     it('should clear URL params after callback', async () => {
       Object.defineProperty(window, 'location', {
         value: {
           origin: 'http://localhost:3000',
-          href: 'https://example.com/callback?code=abc123&state=stored-state-123',
-          search: '?code=abc123&state=stored-state-123',
+          href: 'https://example.com/callback?external_auth=success',
+          search: '?external_auth=success',
         },
         writable: true,
       });
@@ -498,8 +413,7 @@ describe('SocialAuthImpl', () => {
         origin: 'https://evil.com',
         data: {
           type: 'authrim:social:callback',
-          code: 'malicious-code',
-          state: 'test-state',
+          external_auth: 'success',
         },
       });
       window.dispatchEvent(event);
@@ -530,8 +444,7 @@ describe('SocialAuthImpl', () => {
         origin: 'http://localhost:3000',
         data: {
           type: 'wrong-type',
-          code: 'abc123',
-          state: 'test-state',
+          external_auth: 'success',
         },
       });
       window.dispatchEvent(event);
@@ -560,16 +473,12 @@ describe('SocialAuthImpl', () => {
       // Wait for state to be stored
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Get the stored state
-      const storedState = await mockStorage.get('authrim:direct:social:state');
-
       // Simulate successful callback message
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
         data: {
           type: 'authrim:social:callback',
-          code: 'auth-code-123',
-          state: storedState,
+          external_auth: 'success',
         },
       });
       window.dispatchEvent(event);
@@ -580,8 +489,8 @@ describe('SocialAuthImpl', () => {
       const result = await promise;
 
       expect(result.success).toBe(true);
-      expect(result.session).toBeDefined();
-      expect(result.user).toBeDefined();
+      // Session is set via cookie, so no session/user in result
+      expect(mockExchangeToken).not.toHaveBeenCalled();
 
       // Restore fake timers for other tests
       vi.useFakeTimers();
@@ -625,7 +534,7 @@ describe('SocialAuthImpl', () => {
       vi.useFakeTimers();
     });
 
-    it('should handle popup callback with state mismatch', async () => {
+    it('should handle popup callback with missing external_auth', async () => {
       // Use real timers for this test to properly handle async message handler
       vi.useRealTimers();
 
@@ -640,13 +549,11 @@ describe('SocialAuthImpl', () => {
       // Wait for state to be stored
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Simulate callback with wrong state
+      // Simulate callback without external_auth
       const event = new MessageEvent('message', {
         origin: 'http://localhost:3000',
         data: {
           type: 'authrim:social:callback',
-          code: 'auth-code-123',
-          state: 'wrong-state',
         },
       });
       window.dispatchEvent(event);
@@ -657,8 +564,8 @@ describe('SocialAuthImpl', () => {
       const result = await promise;
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('state_mismatch');
-      expect(result.error?.code).toBe('AR004005');
+      expect(result.error?.error).toBe('invalid_response');
+      expect(result.error?.code).toBe('AR004004');
 
       // Restore fake timers for other tests
       vi.useFakeTimers();
