@@ -206,7 +206,6 @@ export async function createAuthrim<T extends AuthrimConfig>(
     config.clientId,
     http,
     () => sessionManager.getStorageKey(), // Storage key calculator
-    undefined, // Diagnostic logger (set later)
   );
 
   // ==========================================================================
@@ -464,7 +463,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
       passkeyImpl.setDiagnosticLogger(logger);
       emailCodeImpl.setDiagnosticLogger(logger);
       socialImpl.setDiagnosticLogger(logger);
-      handoffImpl.setDiagnosticLogger(logger);
+      // Note: handoffImpl does not support diagnostic logging yet
     },
   };
 

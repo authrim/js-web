@@ -9,7 +9,7 @@
  * - PKCE is NOT required (AS handles OAuth flow internally)
  */
 
-import type { Session, User, IDiagnosticLogger } from "@authrim/core";
+import type { Session, User } from "@authrim/core";
 import { AuthrimError } from "@authrim/core";
 import type { BrowserHttpClient } from "../providers/http.js";
 
@@ -61,24 +61,12 @@ export interface HandoffVerifyResponse {
  * session storage through localStorage (same as SessionAuthImpl).
  */
 export class HandoffAuthImpl {
-  private diagnosticLogger?: IDiagnosticLogger;
-
   constructor(
     private readonly issuer: string,
     private readonly clientId: string,
     private readonly http: BrowserHttpClient,
     private readonly getStorageKeyFn: () => string,
-    diagnosticLogger?: IDiagnosticLogger,
-  ) {
-    this.diagnosticLogger = diagnosticLogger;
-  }
-
-  /**
-   * Set diagnostic logger (optional)
-   */
-  setDiagnosticLogger(logger: IDiagnosticLogger | null): void {
-    this.diagnosticLogger = logger ?? undefined;
-  }
+  ) {}
 
   /**
    * Verify handoff token and get RP access token
@@ -98,10 +86,8 @@ export class HandoffAuthImpl {
     state: string,
     clientId: string,
   ): Promise<HandoffVerifyResponse> {
-    this.diagnosticLogger?.log("info", "Handoff token verification started", {
-      client_id: clientId,
-      has_state: !!state,
-    });
+    // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
+    // this.diagnosticLogger?.log("info", "Handoff token verification started", {...});
 
     const response = await this.http.fetch<HandoffVerifyResponse>(
       `${this.issuer}/auth/external/handoff/verify`,
@@ -119,22 +105,12 @@ export class HandoffAuthImpl {
     if (!response.ok || !response.data) {
       const error = response.data as any;
 
-      this.diagnosticLogger?.log("error", "Handoff verification failed", {
-        error_code: error?.error,
-        error_description: error?.error_description,
-      });
-
       // Use SDK's unified error type
       throw new AuthrimError(
-        error?.error || "HANDOFF_VERIFICATION_FAILED",
+        error?.error || "invalid_token",
         error?.error_description || "Handoff verification failed",
       );
     }
-
-    this.diagnosticLogger?.log("info", "Handoff token verified successfully", {
-      user_id: response.data.user.id,
-      expires_in: response.data.expires_in,
-    });
 
     return response.data;
   }
@@ -179,8 +155,8 @@ export class HandoffAuthImpl {
 
     const user: User = {
       id: tokenData.user.id,
-      email: tokenData.user.email,
-      name: tokenData.user.name,
+      email: tokenData.user.email ?? undefined,
+      name: tokenData.user.name ?? undefined,
       emailVerified: tokenData.user.emailVerified,
     };
 
@@ -198,17 +174,11 @@ export class HandoffAuthImpl {
     const savedState = sessionStorage.getItem(HANDOFF_STORAGE_KEYS.STATE);
 
     if (savedState && savedState !== state) {
-      this.diagnosticLogger?.log(
-        "error",
-        "Handoff state mismatch - CSRF attack detected",
-        {
-          expected: savedState,
-          received: state,
-        },
-      );
+      // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
+      // this.diagnosticLogger?.log("error", "Handoff state mismatch - CSRF attack detected", {...});
 
       throw new AuthrimError(
-        "HANDOFF_STATE_MISMATCH",
+        "state_mismatch",
         "Invalid handoff state parameter (CSRF protection)",
       );
     }
@@ -225,9 +195,8 @@ export class HandoffAuthImpl {
   private saveSession(accessToken: string): void {
     const storageKey = this.getStorageKeyFn();
 
-    this.diagnosticLogger?.log("info", "Saving handoff session to storage", {
-      storage_key: storageKey,
-    });
+    // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
+    // this.diagnosticLogger?.log("info", "Saving handoff session to storage", {...});
 
     // Use localStorage directly (same as SessionAuthImpl)
     // This ensures storage key compatibility
@@ -248,6 +217,7 @@ export class HandoffAuthImpl {
       sessionStorage.removeItem(key);
     });
 
-    this.diagnosticLogger?.log("info", "Handoff storage cleaned up");
+    // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
+    // this.diagnosticLogger?.log("info", "Handoff storage cleaned up");
   }
 }
