@@ -41,6 +41,8 @@ export type {
   EmailCodeNamespace,
   SocialNamespace,
   SessionNamespace,
+  HandoffNamespace,
+  HandoffVerifyResponse,
 
   // Shortcuts
   SignInShortcuts,

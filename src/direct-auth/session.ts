@@ -409,4 +409,16 @@ export class SessionAuthImpl implements SessionAuth {
   getToken(): string | null {
     return this.getStoredToken();
   }
+
+  /**
+   * Get storage key for the current session
+   *
+   * @internal This exposes internal storage key calculation for advanced use cases.
+   * The storage key format may change in future versions.
+   *
+   * @returns Storage key used for localStorage
+   */
+  getStorageKey(): string {
+    return this.storageKey;
+  }
 }

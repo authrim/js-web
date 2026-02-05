@@ -301,6 +301,78 @@ export interface SessionNamespace {
   isAuthenticated(): Promise<boolean>;
   /** Clear session cache */
   clearCache(): void;
+  /** Get storage key for the current session (advanced use) */
+  getStorageKey(): string;
+}
+
+/**
+ * Handoff verification response from server
+ */
+export interface HandoffVerifyResponse {
+  token_type: "Bearer";
+  access_token: string;
+  expires_in: number;
+  session: {
+    id: string;
+    userId: string;
+    createdAt: string;
+    expiresAt: string;
+  };
+  user: {
+    id: string;
+    email: string | null;
+    name: string | null;
+    emailVerified: boolean;
+  };
+}
+
+/**
+ * Handoff namespace for Smart Handoff SSO
+ *
+ * Security notes:
+ * - State parameter is validated against handoff-specific sessionStorage namespace
+ * - CSRF boundary: AS-RP handoff token exchange
+ * - PKCE is NOT required (AS handles OAuth flow internally)
+ */
+export interface HandoffNamespace {
+  /**
+   * Verify handoff token and get RP access token
+   *
+   * This is a low-level method that only verifies the token.
+   * Use verifyAndSave() for most use cases.
+   *
+   * @param handoffToken - Handoff token from URL parameter
+   * @param state - State parameter for CSRF protection
+   * @param clientId - OAuth client ID
+   * @returns Token response with session and user
+   * @throws {AuthrimError} HANDOFF_VERIFICATION_FAILED - Token verification failed
+   * @throws {AuthrimError} HANDOFF_STATE_MISMATCH - State mismatch (CSRF attack)
+   */
+  verify(
+    handoffToken: string,
+    state: string,
+    clientId: string,
+  ): Promise<HandoffVerifyResponse>;
+
+  /**
+   * Verify handoff token and save to storage (convenience method)
+   *
+   * This is a convenience method that:
+   * 1. Verifies the handoff token with state validation
+   * 2. Saves access token to localStorage (same as SessionAuthImpl)
+   * 3. Cleans up handoff-specific sessionStorage
+   * 4. Emits auth:login event
+   *
+   * @param handoffToken - Handoff token from URL parameter
+   * @param state - State parameter for CSRF protection
+   * @returns Session, user data, and expiration timestamp
+   * @throws {AuthrimError} HANDOFF_VERIFICATION_FAILED - Token verification failed
+   * @throws {AuthrimError} HANDOFF_STATE_MISMATCH - State mismatch (CSRF attack)
+   */
+  verifyAndSave(
+    handoffToken: string,
+    state: string,
+  ): Promise<{ session: Session; user: User; expiresAt: Date }>;
 }
 
 /**
@@ -489,6 +561,7 @@ export interface AuthrimBase {
   emailCode: EmailCodeNamespace;
   social: SocialNamespace;
   session: SessionNamespace;
+  handoff: HandoffNamespace;
 
   // Shortcuts (syntactic sugar)
   signIn: SignInShortcuts;

@@ -33,6 +33,7 @@ import type {
   EmailCodeNamespace,
   SocialNamespace,
   SessionNamespace,
+  HandoffNamespace,
   SignOutOptions,
   OAuthNamespace,
   AuthResponse,
@@ -54,6 +55,7 @@ import { PasskeyAuthImpl } from "./direct-auth/passkey.js";
 import { EmailCodeAuthImpl } from "./direct-auth/email-code.js";
 import { SocialAuthImpl } from "./direct-auth/social.js";
 import { SessionAuthImpl } from "./direct-auth/session.js";
+import { HandoffAuthImpl } from "./direct-auth/handoff.js";
 
 import { BrowserHttpClient } from "./providers/http.js";
 import { BrowserCryptoProvider } from "./providers/crypto.js";
@@ -197,6 +199,15 @@ export async function createAuthrim<T extends AuthrimConfig>(
     storage,
     exchangeToken,
   });
+
+  // Create Handoff implementation
+  const handoffImpl = new HandoffAuthImpl(
+    config.issuer,
+    config.clientId,
+    http,
+    () => sessionManager.getStorageKey(), // Storage key calculator
+    undefined, // Diagnostic logger (set later)
+  );
 
   // ==========================================================================
   // Passkey Namespace
@@ -382,6 +393,33 @@ export async function createAuthrim<T extends AuthrimConfig>(
     clearCache() {
       sessionManager.clearCache();
     },
+
+    getStorageKey() {
+      return sessionManager.getStorageKey();
+    },
+  };
+
+  // ==========================================================================
+  // Handoff Namespace
+  // ==========================================================================
+
+  const handoff: HandoffNamespace = {
+    async verify(handoffToken: string, state: string, clientId: string) {
+      return handoffImpl.verifyToken(handoffToken, state, clientId);
+    },
+
+    async verifyAndSave(handoffToken: string, state: string) {
+      const result = await handoffImpl.verifyAndSave(handoffToken, state);
+
+      // Emit auth:login event (handled at authrim.ts level, not in impl)
+      emitter.emit("auth:login", {
+        session: result.session,
+        user: result.user,
+        method: "social", // Handoff is considered social login for now
+      });
+
+      return result;
+    },
   };
 
   // ==========================================================================
@@ -416,6 +454,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     emailCode,
     social,
     session,
+    handoff,
     signIn: createShortcuts.signIn(passkey, social),
     signUp: createShortcuts.signUp(passkey),
     signOut,
@@ -425,6 +464,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
       passkeyImpl.setDiagnosticLogger(logger);
       emailCodeImpl.setDiagnosticLogger(logger);
       socialImpl.setDiagnosticLogger(logger);
+      handoffImpl.setDiagnosticLogger(logger);
     },
   };
 
