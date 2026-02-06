@@ -497,6 +497,19 @@ async function createOAuthNamespace(
   const storageOptions: BrowserStorageOptions = config.storage ?? {};
   const storage = createBrowserStorage(storageOptions);
 
+  // Fetch public client configuration from server
+  // This includes client-specific settings like login_ui_url
+  const { fetchClientConfig } = await import('./utils/client-config.js');
+  const clientConfig = await fetchClientConfig(config.issuer, config.clientId);
+
+  if (clientConfig) {
+    console.debug('[Authrim] Client configuration loaded:', {
+      client_id: clientConfig.client_id,
+      client_name: clientConfig.client_name,
+      login_ui_url: clientConfig.login_ui_url,
+    });
+  }
+
   // Create core OAuth client
   const coreClient = await createAuthrimClient({
     issuer: config.issuer,
