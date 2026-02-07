@@ -443,6 +443,9 @@ export interface OAuthTokenSet {
  *
  * Works with Safari ITP and Chrome Third-Party Cookie Phaseout
  * by using top-level navigation instead of iframes.
+ *
+ * Uses /authorize?prompt=none&handoff=true for unified SSO experience.
+ * Works for both Direct Auth (Passkey/EmailCode) and External IdP (Google/Apple).
  */
 export interface TrySilentLoginOptions {
   /**

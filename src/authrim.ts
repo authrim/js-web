@@ -671,6 +671,9 @@ async function createOAuthNamespace(
      *
      * Safari ITP / Chrome Third-Party Cookie Phaseout compatible.
      * This function redirects to IdP and does not return.
+     *
+     * Uses /authorize?prompt=none&handoff=true for unified SSO experience.
+     * Works for both Direct Auth (Passkey/EmailCode) and External IdP (Google/Apple).
      */
     async trySilentLogin(options?: TrySilentLoginOptions): Promise<never> {
       const onLoginRequired = options?.onLoginRequired ?? "return";
@@ -681,8 +684,21 @@ async function createOAuthNamespace(
         throw new Error("returnTo must be same origin");
       }
 
-      // Build authorization URL with prompt=none
-      // Use exposeState: true to get SDK-generated state for CSRF protection
+      // 1. Generate state
+      const state = window.crypto.randomUUID();
+
+      // 2. Save silent login state data
+      const stateData: SilentLoginStateData = {
+        t: "sl",
+        lr: onLoginRequired === "login" ? "l" : "r",
+        rt: returnTo,
+      };
+      sessionStorage.setItem(
+        `authrim:silent_login:${state}`,
+        JSON.stringify(stateData),
+      );
+
+      // 3. Build authorization URL with handoff=true
       const result = await coreClient.buildAuthorizationUrl({
         redirectUri:
           config.silentLoginRedirectUri ??
@@ -692,23 +708,13 @@ async function createOAuthNamespace(
         exposeState: true,
       });
 
-      // Save SilentLoginStateData to sessionStorage keyed by state
-      if (result.state) {
-        const stateData: SilentLoginStateData = {
-          t: "sl", // silent_login
-          lr: onLoginRequired === "login" ? "l" : "r",
-          rt: returnTo,
-        };
-        sessionStorage.setItem(
-          `authrim:silent_login:${result.state}`,
-          JSON.stringify(stateData),
-        );
-      }
+      // Add handoff=true parameter for Session Token Handoff SSO
+      const url = new URL(result.url);
+      url.searchParams.set("handoff", "true");
+      url.searchParams.set("state", state);
 
-      // Redirect (this function never returns)
-      window.location.href = result.url;
-
-      // TypeScript: This line is never reached
+      // 4. Redirect to authorization endpoint
+      window.location.href = url.toString();
       throw new Error("unreachable");
     },
 
