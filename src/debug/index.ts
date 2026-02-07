@@ -20,7 +20,7 @@ export {
   DiagnosticLogger,
   createDiagnosticLogger,
   loadDiagnosticSessionId,
-} from './diagnostic-logger.js';
+} from "./diagnostic-logger.js";
 export type {
   DiagnosticLogLevel,
   TokenValidationStep,
@@ -29,4 +29,4 @@ export type {
   AuthDecisionLogEntry,
   DiagnosticLogEntry,
   DiagnosticLoggerOptions,
-} from './diagnostic-logger.js';
+} from "./diagnostic-logger.js";
