@@ -65,12 +65,7 @@ import {
 } from "./providers/storage.js";
 
 // OAuth-related imports (optional)
-import {
-  createAuthrimClient,
-  stringToBase64url,
-  base64urlToString,
-  type TokenSet,
-} from "@authrim/core";
+import { createAuthrimClient, type TokenSet } from "@authrim/core";
 import { IframeSilentAuth } from "./auth/iframe-silent-auth.js";
 import { PopupAuth } from "./auth/popup-auth.js";
 
@@ -172,7 +167,12 @@ export async function createAuthrim<T extends AuthrimConfig>(
     codeVerifier: string,
     providerId?: string,
   ) => {
-    return sessionManager.exchangeToken(authCode, codeVerifier, undefined, providerId);
+    return sessionManager.exchangeToken(
+      authCode,
+      codeVerifier,
+      undefined,
+      providerId,
+    );
   };
 
   // Create Direct Auth implementations
@@ -499,11 +499,11 @@ async function createOAuthNamespace(
 
   // Fetch public client configuration from server
   // This includes client-specific settings like login_ui_url
-  const { fetchClientConfig } = await import('./utils/client-config.js');
+  const { fetchClientConfig } = await import("./utils/client-config.js");
   const clientConfig = await fetchClientConfig(config.issuer, config.clientId);
 
   if (clientConfig) {
-    console.debug('[Authrim] Client configuration loaded:', {
+    console.debug("[Authrim] Client configuration loaded:", {
       client_id: clientConfig.client_id,
       client_name: clientConfig.client_name,
       login_ui_url: clientConfig.login_ui_url,
@@ -681,30 +681,32 @@ async function createOAuthNamespace(
         throw new Error("returnTo must be same origin");
       }
 
-      // Encode state data (short keys to reduce URL length)
-      const stateData: SilentLoginStateData = {
-        t: "sl", // silent_login
-        lr: onLoginRequired === "login" ? "l" : "r",
-        rt: returnTo,
-      };
-      const state = stringToBase64url(JSON.stringify(stateData));
-
       // Build authorization URL with prompt=none
+      // Use exposeState: true to get SDK-generated state for CSRF protection
       const result = await coreClient.buildAuthorizationUrl({
         redirectUri:
           config.silentLoginRedirectUri ??
           `${window.location.origin}/callback.html`,
         scope: options?.scope,
         prompt: "none",
-        exposeState: false, // We manage state ourselves
+        exposeState: true,
       });
 
-      // Append our custom state to the URL
-      const url = new URL(result.url);
-      url.searchParams.set("state", state);
+      // Save SilentLoginStateData to sessionStorage keyed by state
+      if (result.state) {
+        const stateData: SilentLoginStateData = {
+          t: "sl", // silent_login
+          lr: onLoginRequired === "login" ? "l" : "r",
+          rt: returnTo,
+        };
+        sessionStorage.setItem(
+          `authrim:silent_login:${result.state}`,
+          JSON.stringify(stateData),
+        );
+      }
 
       // Redirect (this function never returns)
-      window.location.href = url.toString();
+      window.location.href = result.url;
 
       // TypeScript: This line is never reached
       throw new Error("unreachable");
@@ -721,34 +723,44 @@ async function createOAuthNamespace(
       const error = params.get("error");
       const stateParam = params.get("state");
 
-      // Try to decode state
-      let stateData: SilentLoginStateData | null = null;
-      if (stateParam) {
-        try {
-          const decoded = base64urlToString(stateParam);
-          const parsed = JSON.parse(decoded) as Record<string, unknown>;
-          // Type guard: check if this is a silent login state
-          if (
-            parsed.t === "sl" &&
-            typeof parsed.lr === "string" &&
-            typeof parsed.rt === "string"
-          ) {
-            stateData = {
-              t: "sl",
-              lr: parsed.lr as "l" | "r",
-              rt: parsed.rt,
-            };
-          }
-        } catch {
-          // Decode failed, not a silent login state
-        }
+      if (!stateParam) {
+        return { status: "error", error: "missing_state" };
       }
 
-      // Not a silent login callback
-      if (!stateData) {
-        // Return error to indicate this is not a silent login callback
+      // Retrieve SilentLoginStateData from sessionStorage
+      const stateDataKey = `authrim:silent_login:${stateParam}`;
+      const stateDataStr = sessionStorage.getItem(stateDataKey);
+
+      if (!stateDataStr) {
+        // Not a silent login callback (no matching state in sessionStorage)
         return { status: "error", error: "not_silent_login" };
       }
+
+      // Parse and validate state data
+      let stateData: SilentLoginStateData;
+      try {
+        const parsed = JSON.parse(stateDataStr) as Record<string, unknown>;
+        if (
+          parsed.t !== "sl" ||
+          typeof parsed.lr !== "string" ||
+          (parsed.lr !== "l" && parsed.lr !== "r") ||
+          typeof parsed.rt !== "string"
+        ) {
+          throw new Error("Invalid state data structure");
+        }
+        stateData = {
+          t: "sl",
+          lr: parsed.lr as "l" | "r",
+          rt: parsed.rt,
+        };
+      } catch {
+        // Invalid state data, remove and return error
+        sessionStorage.removeItem(stateDataKey);
+        return { status: "error", error: "invalid_state_data" };
+      }
+
+      // Immediately remove from sessionStorage to prevent replay attacks
+      sessionStorage.removeItem(stateDataKey);
 
       const returnTo = stateData.rt;
       const onLoginRequired = stateData.lr === "l" ? "login" : "return";
@@ -762,22 +774,28 @@ async function createOAuthNamespace(
       if (error === "login_required") {
         if (onLoginRequired === "login") {
           // Redirect to login screen (without prompt=none)
+          // Use exposeState: true to get SDK-generated state
           const loginResult = await coreClient.buildAuthorizationUrl({
             redirectUri:
               config.silentLoginRedirectUri ??
               `${window.location.origin}/callback.html`,
-            exposeState: false,
+            exposeState: true,
           });
 
-          // Encode return URL in state for after login
-          const loginStateData = { rt: returnTo };
-          const loginUrl = new URL(loginResult.url);
-          loginUrl.searchParams.set(
-            "state",
-            stringToBase64url(JSON.stringify(loginStateData)),
-          );
+          // Save SilentLoginStateData for after login (lr: 'r' to return after login)
+          if (loginResult.state) {
+            const loginStateData: SilentLoginStateData = {
+              t: "sl",
+              lr: "r", // After login, return to returnTo
+              rt: returnTo,
+            };
+            sessionStorage.setItem(
+              `authrim:silent_login:${loginResult.state}`,
+              JSON.stringify(loginStateData),
+            );
+          }
 
-          window.location.href = loginUrl.toString();
+          window.location.href = loginResult.url;
           return { status: "login_required" };
         } else {
           // Return to original page with error

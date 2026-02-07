@@ -322,10 +322,10 @@ describe('createAuthrim', () => {
 
       const auth = await createAuthrim(config);
 
-      // No state parameter = not a silent login callback
-      // Returns { status: 'error', error: 'not_silent_login' }
+      // No state parameter = missing_state error
+      // (state is required to look up silent login data from sessionStorage)
       const result = await auth.oauth!.handleSilentCallback();
-      expect(result).toEqual({ status: 'error', error: 'not_silent_login' });
+      expect(result).toEqual({ status: 'error', error: 'missing_state' });
     });
   });
 

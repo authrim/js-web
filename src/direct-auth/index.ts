@@ -149,7 +149,12 @@ export function createDirectAuthClient(
     codeVerifier: string,
     providerId?: string,
   ) => {
-    return sessionManager.exchangeToken(authCode, codeVerifier, undefined, providerId);
+    return sessionManager.exchangeToken(
+      authCode,
+      codeVerifier,
+      undefined,
+      providerId,
+    );
   };
 
   // Create auth implementations

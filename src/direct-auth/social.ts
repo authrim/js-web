@@ -598,7 +598,11 @@ export class SocialAuthImpl implements SocialAuth {
 
     // Exchange authorization code for session
     try {
-      const result = await this.exchangeToken(data.code, codeVerifier, providerId);
+      const result = await this.exchangeToken(
+        data.code,
+        codeVerifier,
+        providerId,
+      );
       await this.clearStoredState();
 
       resolve({

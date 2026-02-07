@@ -32,31 +32,33 @@ export interface PublicClientConfig {
  */
 export async function fetchClientConfig(
   issuer: string,
-  clientId: string
+  clientId: string,
 ): Promise<PublicClientConfig | null> {
   try {
     // Normalize issuer URL (remove trailing slash)
-    const baseUrl = issuer.replace(/\/$/, '');
+    const baseUrl = issuer.replace(/\/$/, "");
     const url = `${baseUrl}/oauth/clients/${encodeURIComponent(clientId)}/config`;
 
     const response = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Accept': 'application/json',
+        Accept: "application/json",
       },
       // Use cache to avoid unnecessary requests
-      cache: 'default',
+      cache: "default",
     });
 
     if (!response.ok) {
-      console.warn(`Failed to fetch client config: ${response.status} ${response.statusText}`);
+      console.warn(
+        `Failed to fetch client config: ${response.status} ${response.statusText}`,
+      );
       return null;
     }
 
     const config: PublicClientConfig = await response.json();
     return config;
   } catch (error) {
-    console.warn('Failed to fetch client config:', error);
+    console.warn("Failed to fetch client config:", error);
     return null;
   }
 }
