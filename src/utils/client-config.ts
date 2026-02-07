@@ -22,7 +22,7 @@ export interface PublicClientConfig {
  * Fetch public client configuration from server
  *
  * This fetches configuration from the Public Config API endpoint:
- * GET /oauth/clients/:client_id/config
+ * GET /clients/:client_id/config
  *
  * This endpoint is public (no authentication required) and cached for 5 minutes.
  *
@@ -37,7 +37,7 @@ export async function fetchClientConfig(
   try {
     // Normalize issuer URL (remove trailing slash)
     const baseUrl = issuer.replace(/\/$/, "");
-    const url = `${baseUrl}/oauth/clients/${encodeURIComponent(clientId)}/config`;
+    const url = `${baseUrl}/clients/${encodeURIComponent(clientId)}/config`;
 
     const response = await fetch(url, {
       method: "GET",
