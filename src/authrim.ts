@@ -463,7 +463,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
       passkeyImpl.setDiagnosticLogger(logger);
       emailCodeImpl.setDiagnosticLogger(logger);
       socialImpl.setDiagnosticLogger(logger);
-      // Note: handoffImpl does not support diagnostic logging yet
+      handoffImpl.setDiagnosticLogger(logger);
     },
   };
 
