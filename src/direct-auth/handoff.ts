@@ -9,7 +9,7 @@
  * - PKCE is NOT required (AS handles OAuth flow internally)
  */
 
-import type { Session, User } from "@authrim/core";
+import type { Session, User, IDiagnosticLogger } from "@authrim/core";
 import { AuthrimError } from "@authrim/core";
 import type { BrowserHttpClient } from "../providers/http.js";
 
@@ -61,12 +61,18 @@ export interface HandoffVerifyResponse {
  * session storage through localStorage (same as SessionAuthImpl).
  */
 export class HandoffAuthImpl {
+  private diagnosticLogger?: IDiagnosticLogger | null;
+
   constructor(
     private readonly issuer: string,
     private readonly clientId: string,
     private readonly http: BrowserHttpClient,
     private readonly getStorageKeyFn: () => string,
   ) {}
+
+  setDiagnosticLogger(logger: IDiagnosticLogger | null | undefined): void {
+    this.diagnosticLogger = logger;
+  }
 
   /**
    * Verify handoff token and get RP access token
@@ -104,13 +110,24 @@ export class HandoffAuthImpl {
 
     if (!response.ok || !response.data) {
       const error = response.data as any;
-
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: error?.error || "handoff_verification_failed",
+        flow: "smart-handoff",
+        context: { status: response.status },
+      });
       // Use SDK's unified error type
       throw new AuthrimError(
         error?.error || "invalid_token",
         error?.error_description || "Handoff verification failed",
       );
     }
+
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "allow",
+      reason: "handoff_verification_success",
+      flow: "smart-handoff",
+    });
 
     return response.data;
   }
@@ -174,9 +191,12 @@ export class HandoffAuthImpl {
     const savedState = sessionStorage.getItem(HANDOFF_STORAGE_KEYS.STATE);
 
     if (savedState && savedState !== state) {
-      // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
-      // this.diagnosticLogger?.log("error", "Handoff state mismatch - CSRF attack detected", {...});
-
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: "state_mismatch",
+        flow: "smart-handoff",
+        context: { detail: "CSRF protection triggered" },
+      });
       throw new AuthrimError(
         "state_mismatch",
         "Invalid handoff state parameter (CSRF protection)",
@@ -194,9 +214,6 @@ export class HandoffAuthImpl {
    */
   private saveSession(accessToken: string): void {
     const storageKey = this.getStorageKeyFn();
-
-    // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
-    // this.diagnosticLogger?.log("info", "Saving handoff session to storage", {...});
 
     // Use localStorage directly (same as SessionAuthImpl)
     // This ensures storage key compatibility
@@ -217,7 +234,5 @@ export class HandoffAuthImpl {
       sessionStorage.removeItem(key);
     });
 
-    // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
-    // this.diagnosticLogger?.log("info", "Handoff storage cleaned up");
   }
 }
