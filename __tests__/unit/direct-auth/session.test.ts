@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SessionAuthImpl } from '../../../src/direct-auth/session.js';
-import type { HttpClient, HttpResponse, Session, User } from '@authrim/core';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { SessionAuthImpl } from "../../../src/direct-auth/session.js";
+import type { HttpClient, HttpResponse, Session, User } from "@authrim/core";
 
-// Mock localStorage
-const localStorageMock = (() => {
+function createStorageMock() {
   let store: Record<string, string> = {};
   return {
     getItem: vi.fn((key: string) => store[key] || null),
@@ -21,10 +20,18 @@ const localStorageMock = (() => {
     },
     key: vi.fn((index: number) => Object.keys(store)[index] || null),
   };
-})();
+}
 
-Object.defineProperty(global, 'localStorage', {
+const localStorageMock = createStorageMock();
+const sessionStorageMock = createStorageMock();
+
+Object.defineProperty(global, "localStorage", {
   value: localStorageMock,
+  writable: true,
+});
+
+Object.defineProperty(global, "sessionStorage", {
+  value: sessionStorageMock,
   writable: true,
 });
 
@@ -34,30 +41,31 @@ const createMockHttp = (): HttpClient => ({
 });
 
 const createMockSession = (overrides?: Partial<Session>): Session => ({
-  id: 'session-123',
+  id: "session-123",
   expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
   ...overrides,
 });
 
 const createMockUser = (overrides?: Partial<User>): User => ({
-  id: 'user-123',
-  email: 'test@example.com',
+  id: "user-123",
+  email: "test@example.com",
   ...overrides,
 });
 
-describe('SessionAuthImpl', () => {
+describe("SessionAuthImpl", () => {
   let session: SessionAuthImpl;
   let mockHttp: HttpClient;
 
   beforeEach(() => {
     vi.useFakeTimers();
     localStorageMock.clear();
+    sessionStorageMock.clear();
     vi.clearAllMocks();
     mockHttp = createMockHttp();
 
     session = new SessionAuthImpl({
-      issuer: 'https://auth.example.com',
-      clientId: 'test-client-id',
+      issuer: "https://auth.example.com",
+      clientId: "test-client-id",
       http: mockHttp,
     });
   });
@@ -67,25 +75,76 @@ describe('SessionAuthImpl', () => {
     vi.clearAllMocks();
   });
 
-  describe('get', () => {
-    it('should return null when no token is stored', async () => {
+  describe("get", () => {
+    it("should return null when no token is stored", async () => {
       const result = await session.get();
 
       expect(result).toBeNull();
       expect(mockHttp.fetch).not.toHaveBeenCalled();
     });
 
-    it('should fetch session from server using Authorization header', async () => {
+    it("should ignore legacy localStorage tokens by default", async () => {
+      localStorageMock.setItem(session["storageKey"], "legacy-access-token");
+
+      const result = await session.get();
+
+      expect(result).toBeNull();
+      expect(mockHttp.fetch).not.toHaveBeenCalled();
+    });
+
+    it("should use sessionStorage only with explicit opt-in", async () => {
+      const persistedSession = new SessionAuthImpl({
+        issuer: "https://auth.example.com",
+        clientId: "test-client-id",
+        http: mockHttp,
+        tokenStorage: "sessionStorage",
+      });
+      persistedSession.setAccessToken("persisted-access-token");
+
+      expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
+        persistedSession["storageKey"],
+        "persisted-access-token",
+      );
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+
+      const reloadedSession = new SessionAuthImpl({
+        issuer: "https://auth.example.com",
+        clientId: "test-client-id",
+        http: mockHttp,
+        tokenStorage: "sessionStorage",
+      });
+      const mockSession = createMockSession();
+      const mockUser = createMockUser();
+      vi.mocked(mockHttp.fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        data: { session: mockSession, user: mockUser },
+      });
+
+      const result = await reloadedSession.get();
+
+      expect(result).toEqual(mockSession);
+      expect(mockHttp.fetch).toHaveBeenCalledWith(
+        "https://auth.example.com/api/v1/auth/direct/session",
+        expect.objectContaining({
+          headers: { Authorization: "Bearer persisted-access-token" },
+        }),
+      );
+    });
+
+    it("should fetch session from server using Authorization header", async () => {
       // Store a token first
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -95,24 +154,24 @@ describe('SessionAuthImpl', () => {
 
       expect(result).toEqual(mockSession);
       expect(mockHttp.fetch).toHaveBeenCalledWith(
-        'https://auth.example.com/api/v1/auth/direct/session',
+        "https://auth.example.com/api/v1/auth/direct/session",
         {
-          method: 'GET',
-          headers: { 'Authorization': 'Bearer test-access-token' },
-        }
+          method: "GET",
+          headers: { Authorization: "Bearer test-access-token" },
+        },
       );
     });
 
-    it('should return cached session within TTL', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should return cached session within TTL", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -128,16 +187,16 @@ describe('SessionAuthImpl', () => {
       expect(mockHttp.fetch).toHaveBeenCalledTimes(1);
     });
 
-    it('should refetch after cache TTL expires', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should refetch after cache TTL expires", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -155,14 +214,14 @@ describe('SessionAuthImpl', () => {
       expect(mockHttp.fetch).toHaveBeenCalledTimes(2);
     });
 
-    it('should remove token and return null when server returns 401', async () => {
-      const token = 'invalid-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should remove token and return null when server returns 401", async () => {
+      const token = "invalid-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<unknown> = {
         ok: false,
         status: 401,
-        statusText: 'Unauthorized',
+        statusText: "Unauthorized",
         headers: {},
         data: null,
       };
@@ -171,14 +230,15 @@ describe('SessionAuthImpl', () => {
       const result = await session.get();
 
       expect(result).toBeNull();
-      expect(localStorageMock.removeItem).toHaveBeenCalled();
+      expect(session.getToken()).toBeNull();
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
-    it('should return null and clear cache on error', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should return null and clear cache on error", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
-      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error('Network error'));
+      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error("Network error"));
 
       const result = await session.get();
 
@@ -186,17 +246,17 @@ describe('SessionAuthImpl', () => {
     });
   });
 
-  describe('getUser', () => {
-    it('should return cached user', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("getUser", () => {
+    it("should return cached user", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -212,16 +272,16 @@ describe('SessionAuthImpl', () => {
       expect(mockHttp.fetch).toHaveBeenCalledTimes(1);
     });
 
-    it('should fetch session if no cached user', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should fetch session if no cached user", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -233,17 +293,17 @@ describe('SessionAuthImpl', () => {
       expect(mockHttp.fetch).toHaveBeenCalledTimes(1);
     });
 
-    it('should return null when no token stored', async () => {
+    it("should return null when no token stored", async () => {
       const result = await session.getUser();
 
       expect(result).toBeNull();
     });
   });
 
-  describe('validate', () => {
-    it('should return true for valid session', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("validate", () => {
+    it("should return true for valid session", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession({
         expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
@@ -252,7 +312,7 @@ describe('SessionAuthImpl', () => {
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -263,9 +323,9 @@ describe('SessionAuthImpl', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false for expired session', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should return false for expired session", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession({
         expiresAt: new Date(Date.now() - 1000).toISOString(), // 1 second ago
@@ -274,7 +334,7 @@ describe('SessionAuthImpl', () => {
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -285,17 +345,17 @@ describe('SessionAuthImpl', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false when no token stored', async () => {
+    it("should return false when no token stored", async () => {
       const result = await session.validate();
 
       expect(result).toBe(false);
     });
 
-    it('should return false on error', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should return false on error", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
-      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error('Network error'));
+      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error("Network error"));
 
       const result = await session.validate();
 
@@ -303,15 +363,15 @@ describe('SessionAuthImpl', () => {
     });
   });
 
-  describe('logout', () => {
-    it('should call logout endpoint with Authorization header when token exists', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("logout", () => {
+    it("should call logout endpoint with Authorization header when token exists", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<void> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: undefined,
       };
@@ -320,31 +380,31 @@ describe('SessionAuthImpl', () => {
       await session.logout();
 
       expect(mockHttp.fetch).toHaveBeenCalledWith(
-        'https://auth.example.com/api/v1/auth/direct/logout',
+        "https://auth.example.com/api/v1/auth/direct/logout",
         expect.objectContaining({
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer test-access-token',
+            "Content-Type": "application/json",
+            Authorization: "Bearer test-access-token",
           },
-        })
+        }),
       );
     });
 
-    it('should not call server when no token exists', async () => {
+    it("should not call server when no token exists", async () => {
       await session.logout();
 
       expect(mockHttp.fetch).not.toHaveBeenCalled();
     });
 
-    it('should remove stored token after logout', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should remove stored token after logout", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<void> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: undefined,
       };
@@ -352,17 +412,18 @@ describe('SessionAuthImpl', () => {
 
       await session.logout();
 
-      expect(localStorageMock.removeItem).toHaveBeenCalled();
+      expect(session.getToken()).toBeNull();
+      expect(localStorageMock.removeItem).not.toHaveBeenCalled();
     });
 
-    it('should include revokeTokens option', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should include revokeTokens option", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<void> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: undefined,
       };
@@ -374,13 +435,36 @@ describe('SessionAuthImpl', () => {
         expect.any(String),
         expect.objectContaining({
           body: expect.stringContaining('"revoke_tokens":true'),
-        })
+        }),
       );
     });
 
-    it('should clear cache after logout', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should include logoutScope option as logout_scope", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
+
+      const mockResponse: HttpResponse<void> = {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        data: undefined,
+      };
+      vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
+
+      await session.logout({ logoutScope: "global" });
+
+      expect(mockHttp.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"logout_scope":"global"'),
+        }),
+      );
+    });
+
+    it("should clear cache after logout", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       // Setup: first get a session to populate cache
       const mockSession = createMockSession();
@@ -388,7 +472,7 @@ describe('SessionAuthImpl', () => {
       const getResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -399,7 +483,7 @@ describe('SessionAuthImpl', () => {
       const logoutResponse: HttpResponse<void> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: undefined,
       };
@@ -413,24 +497,24 @@ describe('SessionAuthImpl', () => {
       expect(result).toBeNull();
     });
 
-    it('should not throw on logout error', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should not throw on logout error", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
-      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error('Network error'));
+      vi.mocked(mockHttp.fetch).mockRejectedValue(new Error("Network error"));
 
       // Should not throw
       await expect(session.logout()).resolves.not.toThrow();
     });
 
-    it('should redirect when redirectUri is specified', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should redirect when redirectUri is specified", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<void> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: undefined,
       };
@@ -438,205 +522,205 @@ describe('SessionAuthImpl', () => {
 
       // Mock window.location
       const originalLocation = window.location;
-      const mockLocation = { href: '' };
-      Object.defineProperty(window, 'location', {
+      const mockLocation = { href: "" };
+      Object.defineProperty(window, "location", {
         value: mockLocation,
         writable: true,
       });
 
-      await session.logout({ redirectUri: 'https://example.com/logout-callback' });
+      await session.logout({
+        redirectUri: "https://example.com/logout-callback",
+      });
 
-      expect(mockLocation.href).toBe('https://example.com/logout-callback');
+      expect(mockLocation.href).toBe("https://example.com/logout-callback");
 
       // Restore
-      Object.defineProperty(window, 'location', {
+      Object.defineProperty(window, "location", {
         value: originalLocation,
         writable: true,
       });
     });
   });
 
-  describe('exchangeToken', () => {
-    it('should exchange auth code and store access_token', async () => {
-      const mockSession = createMockSession();
-      const mockUser = createMockUser();
+  describe("exchangeToken", () => {
+    it("should exchange direct auth artifact and store access_token in memory", async () => {
       const mockResponse: HttpResponse<{
         access_token: string;
-        session: Session;
-        user: User;
+        token_type: "Bearer";
+        expires_in: number;
       }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: {
-          access_token: 'new-access-token',
-          session: mockSession,
-          user: mockUser,
+          access_token: "new-access-token",
+          token_type: "Bearer",
+          expires_in: 3600,
         },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      const result = await session.exchangeToken('auth-code-123', 'code-verifier-123');
-
-      expect(result).toEqual({
-        session: mockSession,
-        user: mockUser,
-      });
-
-      // Verify token was stored
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        session['storageKey'],
-        'new-access-token'
+      const result = await session.exchangeToken(
+        "auth-code-123",
+        "code-verifier-123",
       );
 
+      expect(result).toEqual({
+        tokens: {
+          access_token: "new-access-token",
+          token_type: "Bearer",
+          expires_in: 3600,
+        },
+      });
+
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+
       expect(mockHttp.fetch).toHaveBeenCalledWith(
-        'https://auth.example.com/api/v1/auth/direct/token',
+        "https://auth.example.com/token",
         expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('"grant_type":"authorization_code"'),
-        })
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: expect.stringContaining(
+            "grant_type=urn%3Aauthrim%3Aparams%3Aoauth%3Agrant-type%3Adirect-auth-finish",
+          ),
+        }),
       );
     });
 
-    it('should include request_refresh_token when specified', async () => {
-      const mockSession = createMockSession();
-      const mockUser = createMockUser();
+    it("should include resource when refresh token request is specified", async () => {
       const mockResponse: HttpResponse<{
         access_token: string;
-        session: Session;
-        user: User;
+        token_type: "Bearer";
+        expires_in: number;
       }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: {
-          access_token: 'new-access-token',
-          session: mockSession,
-          user: mockUser,
+          access_token: "new-access-token",
+          token_type: "Bearer",
+          expires_in: 3600,
         },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      await session.exchangeToken('auth-code-123', 'code-verifier-123', true);
+      await session.exchangeToken("auth-code-123", "code-verifier-123", true);
 
       expect(mockHttp.fetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          body: expect.stringContaining('"request_refresh_token":true'),
-        })
+          body: expect.stringContaining("resource=test-client-id"),
+        }),
       );
     });
 
-    it('should cache session after exchange', async () => {
-      const mockSession = createMockSession();
-      const mockUser = createMockUser();
+    it("should not create a Direct Auth session cache from token response", async () => {
       const mockResponse: HttpResponse<{
         access_token: string;
-        session: Session;
-        user: User;
+        token_type: "Bearer";
+        expires_in: number;
       }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: {
-          access_token: 'new-access-token',
-          session: mockSession,
-          user: mockUser,
+          access_token: "new-access-token",
+          token_type: "Bearer",
+          expires_in: 3600,
         },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      await session.exchangeToken('auth-code-123', 'code-verifier-123');
+      await session.exchangeToken("auth-code-123", "code-verifier-123");
 
-      // Get should return cached session (without making another fetch)
+      // Canonical token responses do not carry Direct Auth session bootstrap data.
       const cachedSession = await session.get();
-      expect(cachedSession).toEqual(mockSession);
-      expect(mockHttp.fetch).toHaveBeenCalledTimes(1); // Only the exchange call
+      expect(cachedSession).toBeNull();
+      expect(mockHttp.fetch).toHaveBeenCalledTimes(2);
     });
 
-    it('should throw error for invalid_grant', async () => {
+    it("should throw error for invalid_grant", async () => {
       const mockResponse: HttpResponse<{
         error: string;
         error_description: string;
       }> = {
         ok: false,
         status: 400,
-        statusText: 'Bad Request',
+        statusText: "Bad Request",
         headers: {},
         data: {
-          error: 'invalid_grant',
-          error_description: 'The authorization code is invalid',
+          error: "invalid_grant",
+          error_description: "The authorization code is invalid",
         },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      await expect(session.exchangeToken('invalid-code', 'verifier')).rejects.toThrow(
-        'The authorization code is invalid'
-      );
+      await expect(
+        session.exchangeToken("invalid-code", "verifier"),
+      ).rejects.toThrow("The authorization code is invalid");
     });
 
-    it('should throw error for expired_token', async () => {
+    it("should throw error for expired_token", async () => {
       const mockResponse: HttpResponse<{
         error: string;
         error_description: string;
       }> = {
         ok: false,
         status: 400,
-        statusText: 'Bad Request',
+        statusText: "Bad Request",
         headers: {},
         data: {
-          error: 'expired_token',
-          error_description: 'The authorization code has expired',
+          error: "expired_token",
+          error_description: "The authorization code has expired",
         },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      await expect(session.exchangeToken('expired-code', 'verifier')).rejects.toThrow(
-        'The authorization code has expired'
-      );
+      await expect(
+        session.exchangeToken("expired-code", "verifier"),
+      ).rejects.toThrow("The authorization code has expired");
     });
 
-    it('should throw generic error for unknown errors', async () => {
+    it("should throw generic error for unknown errors", async () => {
       const mockResponse: HttpResponse<unknown> = {
         ok: false,
         status: 500,
-        statusText: 'Internal Server Error',
+        statusText: "Internal Server Error",
         headers: {},
         data: null,
       };
       vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
 
-      await expect(session.exchangeToken('code', 'verifier')).rejects.toThrow(
-        'Failed to exchange authorization code for tokens'
+      await expect(session.exchangeToken("code", "verifier")).rejects.toThrow(
+        "Failed to exchange authorization code for tokens",
       );
     });
   });
 
-  describe('refresh', () => {
-    it('should clear cache and fetch new session', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("refresh", () => {
+    it("should clear cache and fetch new session", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
-      const mockSession1 = createMockSession({ id: 'session-1' });
-      const mockSession2 = createMockSession({ id: 'session-2' });
+      const mockSession1 = createMockSession({ id: "session-1" });
+      const mockSession2 = createMockSession({ id: "session-2" });
       const mockUser = createMockUser();
 
       vi.mocked(mockHttp.fetch)
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           headers: {},
           data: { session: mockSession1, user: mockUser },
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           headers: {},
           data: { session: mockSession2, user: mockUser },
         });
@@ -652,17 +736,17 @@ describe('SessionAuthImpl', () => {
     });
   });
 
-  describe('isAuthenticated', () => {
-    it('should return true when session exists', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("isAuthenticated", () => {
+    it("should return true when session exists", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -673,21 +757,21 @@ describe('SessionAuthImpl', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when no token stored', async () => {
+    it("should return false when no token stored", async () => {
       const result = await session.isAuthenticated();
 
       expect(result).toBe(false);
       expect(mockHttp.fetch).not.toHaveBeenCalled();
     });
 
-    it('should return false when session validation fails', async () => {
-      const token = 'invalid-token';
-      localStorageMock.setItem(session['storageKey'], token);
+    it("should return false when session validation fails", async () => {
+      const token = "invalid-token";
+      session["setAccessToken"](token);
 
       const mockResponse: HttpResponse<unknown> = {
         ok: false,
         status: 401,
-        statusText: 'Unauthorized',
+        statusText: "Unauthorized",
         headers: {},
         data: null,
       };
@@ -699,17 +783,17 @@ describe('SessionAuthImpl', () => {
     });
   });
 
-  describe('clearCache', () => {
-    it('should clear cached session and user', async () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("clearCache", () => {
+    it("should clear cached session and user", async () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const mockSession = createMockSession();
       const mockUser = createMockUser();
       const mockResponse: HttpResponse<{ session: Session; user: User }> = {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         headers: {},
         data: { session: mockSession, user: mockUser },
       };
@@ -728,17 +812,17 @@ describe('SessionAuthImpl', () => {
     });
   });
 
-  describe('getToken', () => {
-    it('should return stored token', () => {
-      const token = 'test-access-token';
-      localStorageMock.setItem(session['storageKey'], token);
+  describe("getToken", () => {
+    it("should return stored token", () => {
+      const token = "test-access-token";
+      session["setAccessToken"](token);
 
       const result = session.getToken();
 
       expect(result).toBe(token);
     });
 
-    it('should return null when no token stored', () => {
+    it("should return null when no token stored", () => {
       const result = session.getToken();
 
       expect(result).toBeNull();

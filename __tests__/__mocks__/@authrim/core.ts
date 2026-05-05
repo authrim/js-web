@@ -8,14 +8,17 @@
 // Base64url encode
 export function base64urlEncode(bytes: Uint8Array): string {
   const binary = String.fromCharCode(...bytes);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 // Base64url decode
 export function base64urlDecode(str: string): Uint8Array {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
   const padLength = (4 - (base64.length % 4)) % 4;
-  base64 += '='.repeat(padLength);
+  base64 += "=".repeat(padLength);
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -28,14 +31,18 @@ export function base64urlDecode(str: string): Uint8Array {
 export class AuthrimError extends Error {
   readonly code: string;
   readonly details?: Record<string, unknown>;
-  readonly meta: { retryable: boolean; severity: 'warn' | 'error' | 'fatal' };
+  readonly meta: { retryable: boolean; severity: "warn" | "error" | "fatal" };
 
-  constructor(code: string, message: string, options?: { details?: Record<string, unknown> }) {
+  constructor(
+    code: string,
+    message: string,
+    options?: { details?: Record<string, unknown> },
+  ) {
     super(message);
-    this.name = 'AuthrimError';
+    this.name = "AuthrimError";
     this.code = code;
     this.details = options?.details;
-    this.meta = { retryable: false, severity: 'error' };
+    this.meta = { retryable: false, severity: "error" };
   }
 }
 
@@ -44,17 +51,20 @@ export interface TokenSet {
   accessToken: string;
   refreshToken?: string;
   idToken?: string;
-  tokenType: 'Bearer';
+  tokenType: "Bearer";
   expiresAt: number;
   scope?: string;
 }
 
 export interface HttpClient {
-  fetch<T = unknown>(url: string, options?: HttpOptions): Promise<HttpResponse<T>>;
+  fetch<T = unknown>(
+    url: string,
+    options?: HttpOptions,
+  ): Promise<HttpResponse<T>>;
 }
 
 export interface HttpOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   headers?: Record<string, string>;
   body?: string | FormData | URLSearchParams;
   timeout?: number;
@@ -87,7 +97,7 @@ export interface AuthrimStorage {
 export interface BuildAuthorizationUrlOptions {
   redirectUri: string;
   scope?: string;
-  prompt?: 'none' | 'login' | 'consent' | 'select_account';
+  prompt?: "none" | "login" | "consent" | "select_account";
   loginHint?: string;
   acrValues?: string;
   extraParams?: Record<string, string>;
@@ -102,6 +112,7 @@ export interface AuthorizationUrlResult {
 
 export interface LogoutOptions {
   postLogoutRedirectUri?: string;
+  logoutScope?: "local" | "group" | "global";
 }
 
 export interface LogoutResult {
@@ -129,7 +140,9 @@ export interface AuthrimClientConfig {
 
 // Mock client interface
 export interface AuthrimClient {
-  buildAuthorizationUrl(options: BuildAuthorizationUrlOptions): Promise<AuthorizationUrlResult>;
+  buildAuthorizationUrl(
+    options: BuildAuthorizationUrlOptions,
+  ): Promise<AuthorizationUrlResult>;
   handleCallback(callbackUrl: string): Promise<TokenSet>;
   logout(options?: LogoutOptions): Promise<LogoutResult>;
   on(event: string, handler: (data: unknown) => void): () => void;
@@ -138,6 +151,111 @@ export interface AuthrimClient {
     getTokens(): Promise<TokenSet | null>;
     isAuthenticated(): Promise<boolean>;
   };
+}
+
+// ============================================================================
+// Product Client Mocks
+// ============================================================================
+
+export interface StepUpClientOptions {
+  issuer: string;
+  http: HttpClient;
+}
+
+export class StepUpClient {
+  readonly options: StepUpClientOptions;
+
+  constructor(options: StepUpClientOptions) {
+    this.options = options;
+  }
+
+  async start(): Promise<Record<string, unknown>> {
+    return { challenge_id: "mock-step-up-challenge" };
+  }
+
+  async getAction(): Promise<Record<string, unknown>> {
+    return { action: "mock-action" };
+  }
+
+  async complete(): Promise<Record<string, unknown>> {
+    return { step_up_receipt: "mock-step-up-receipt" };
+  }
+
+  async resend(): Promise<Record<string, unknown>> {
+    return { status: "resent" };
+  }
+
+  async cancel(): Promise<Record<string, unknown>> {
+    return { status: "cancelled" };
+  }
+}
+
+export interface CustomerProfileClientOptions {
+  issuer: string;
+  http: HttpClient;
+}
+
+export class CustomerProfileClient {
+  readonly options: CustomerProfileClientOptions;
+
+  constructor(options: CustomerProfileClientOptions) {
+    this.options = options;
+  }
+
+  async getWithElevationGrant(): Promise<Record<string, unknown>> {
+    return {
+      profile: {
+        user_id: "mock-user",
+      },
+    };
+  }
+
+  async updateDelegated(): Promise<Record<string, unknown>> {
+    return {
+      customer_profile: {
+        user_id: "mock-user",
+      },
+    };
+  }
+}
+
+export interface DeviceInventoryClientOptions {
+  issuer: string;
+  http: HttpClient;
+}
+
+export class DeviceInventoryClient {
+  readonly options: DeviceInventoryClientOptions;
+
+  constructor(options: DeviceInventoryClientOptions) {
+    this.options = options;
+  }
+
+  async list(): Promise<Record<string, unknown>> {
+    return {
+      devices: [],
+    };
+  }
+
+  async rename(): Promise<Record<string, unknown>> {
+    return {
+      device: {
+        id: "mock-device",
+      },
+    };
+  }
+
+  async unlink(): Promise<Record<string, unknown>> {
+    return {
+      ok: true,
+      device_unlink_result: {
+        action: "device_unlinked",
+        target_id: "mock-device",
+        signed_out_required: false,
+        status: "completed",
+      },
+    };
+  }
 }
 
 // ============================================================================
@@ -196,21 +314,32 @@ export interface AuthResult {
 
 export interface DirectAuthLogoutOptions {
   revokeTokens?: boolean;
+  logoutScope?: "local" | "group" | "global";
   redirectUri?: string;
 }
 
+export type DirectAuthChannel = "browser" | "native" | "server";
+
 export interface DirectAuthTokenRequest {
-  grant_type: 'authorization_code';
-  code: string;
+  grant_type: "urn:authrim:params:oauth:grant-type:direct-auth-finish";
+  direct_auth_artifact: string;
   client_id: string;
   code_verifier: string;
+  channel: DirectAuthChannel;
   provider_id?: string;
-  request_refresh_token?: boolean;
+  resource?: string | string[];
 }
 
 export interface DirectAuthTokenResponse {
-  session?: Session;
-  user?: User;
+  token_type: "Bearer" | "DPoP" | string;
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  refresh_token_expires_in?: number;
+  refresh_token_expires_at_unix?: number;
+  id_token?: string;
+  scope?: string;
+  device_secret?: string;
 }
 
 // Session Auth Interface
@@ -223,8 +352,15 @@ export interface SessionAuth {
 
 // Email Code Auth Interface
 export interface EmailCodeAuth {
-  send(email: string, options?: EmailCodeSendOptions): Promise<EmailCodeSendResult>;
-  verify(email: string, code: string, options?: EmailCodeVerifyOptions): Promise<AuthResult>;
+  send(
+    email: string,
+    options?: EmailCodeSendOptions,
+  ): Promise<EmailCodeSendResult>;
+  verify(
+    email: string,
+    code: string,
+    options?: EmailCodeVerifyOptions,
+  ): Promise<AuthResult>;
   hasPendingVerification(email: string): boolean;
   getRemainingTime(email: string): number;
   clearPendingVerification(email: string): void;
@@ -249,7 +385,8 @@ export interface EmailCodeSendRequest {
   client_id: string;
   email: string;
   code_challenge: string;
-  code_challenge_method: 'S256';
+  code_challenge_method: "S256";
+  channel: DirectAuthChannel;
   locale?: string;
 }
 
@@ -263,10 +400,13 @@ export interface EmailCodeVerifyRequest {
   attempt_id: string;
   code: string;
   code_verifier: string;
+  channel: DirectAuthChannel;
 }
 
 export interface EmailCodeVerifyResponse {
-  auth_code?: string;
+  direct_auth_artifact: string;
+  expires_in: number;
+  is_new_user?: boolean;
   error?: string;
   error_description?: string;
   remaining_attempts?: number;
@@ -284,42 +424,48 @@ export interface PasskeyAuth {
 
 export interface PasskeyLoginOptions {
   conditional?: boolean;
-  mediation?: 'optional' | 'required' | 'silent' | 'conditional';
+  mediation?: "optional" | "required" | "silent" | "conditional";
   signal?: AbortSignal;
 }
 
 export interface PasskeySignUpOptions {
   email: string;
   displayName?: string;
-  authenticatorType?: 'platform' | 'cross-platform';
-  residentKey?: 'required' | 'preferred' | 'discouraged';
-  userVerification?: 'required' | 'preferred' | 'discouraged';
+  authenticatorType?: "platform" | "cross-platform";
+  residentKey?: "required" | "preferred" | "discouraged";
+  userVerification?: "required" | "preferred" | "discouraged";
   signal?: AbortSignal;
 }
 
 export interface PasskeyRegisterOptions {
   displayName?: string;
-  authenticatorType?: 'platform' | 'cross-platform';
-  residentKey?: 'required' | 'preferred' | 'discouraged';
-  userVerification?: 'required' | 'preferred' | 'discouraged';
+  authenticatorType?: "platform" | "cross-platform";
+  residentKey?: "required" | "preferred" | "discouraged";
+  userVerification?: "required" | "preferred" | "discouraged";
   signal?: AbortSignal;
 }
 
 export interface PasskeyCredential {
   credentialId: string;
   publicKey: string;
-  authenticatorType: 'platform' | 'cross-platform';
+  authenticatorType: "platform" | "cross-platform";
   transports?: AuthenticatorTransportType[];
   createdAt: string;
   displayName?: string;
 }
 
-export type AuthenticatorTransportType = 'usb' | 'nfc' | 'ble' | 'internal' | 'hybrid';
+export type AuthenticatorTransportType =
+  | "usb"
+  | "nfc"
+  | "ble"
+  | "internal"
+  | "hybrid";
 
 export interface PasskeyLoginStartRequest {
   client_id: string;
   code_challenge: string;
-  code_challenge_method: 'S256';
+  code_challenge_method: "S256";
+  channel: DirectAuthChannel;
 }
 
 export interface PasskeyLoginStartResponse {
@@ -342,10 +488,12 @@ export interface PasskeyLoginFinishRequest {
   challenge_id: string;
   credential: AuthenticatorAssertionResponseJSON;
   code_verifier: string;
+  channel: DirectAuthChannel;
 }
 
 export interface PasskeyLoginFinishResponse {
-  auth_code: string;
+  direct_auth_artifact: string;
+  expires_in: number;
 }
 
 export interface PasskeySignupStartRequest {
@@ -353,10 +501,11 @@ export interface PasskeySignupStartRequest {
   email: string;
   display_name?: string;
   code_challenge: string;
-  code_challenge_method: 'S256';
-  authenticator_type?: 'platform' | 'cross-platform';
-  resident_key?: 'required' | 'preferred' | 'discouraged';
-  user_verification?: 'required' | 'preferred' | 'discouraged';
+  code_challenge_method: "S256";
+  channel: DirectAuthChannel;
+  authenticator_type?: "platform" | "cross-platform";
+  resident_key?: "required" | "preferred" | "discouraged";
+  user_verification?: "required" | "preferred" | "discouraged";
 }
 
 export interface PasskeySignupStartResponse {
@@ -387,10 +536,13 @@ export interface PasskeySignupFinishRequest {
   challenge_id: string;
   credential: AuthenticatorAttestationResponseJSON;
   code_verifier: string;
+  channel: DirectAuthChannel;
 }
 
 export interface PasskeySignupFinishResponse {
-  auth_code: string;
+  direct_auth_artifact: string;
+  expires_in: number;
+  is_new_user?: boolean;
 }
 
 export interface AuthenticatorAssertionResponseJSON {
@@ -408,14 +560,25 @@ export interface AuthenticatorAttestationResponseJSON {
 
 // Social Auth Interface
 export interface SocialAuth {
-  loginWithPopup(provider: SocialProvider, options?: SocialLoginOptions): Promise<AuthResult>;
-  loginWithRedirect(provider: SocialProvider, options?: SocialLoginOptions): Promise<void>;
+  loginWithPopup(
+    provider: SocialProvider,
+    options?: SocialLoginOptions,
+  ): Promise<AuthResult>;
+  loginWithRedirect(
+    provider: SocialProvider,
+    options?: SocialLoginOptions,
+  ): Promise<void>;
   handleCallback(): Promise<AuthResult>;
   hasCallbackParams(): boolean;
   getSupportedProviders(): SocialProvider[];
 }
 
-export type SocialProvider = 'google' | 'github' | 'apple' | 'microsoft' | 'facebook';
+export type SocialProvider =
+  | "google"
+  | "github"
+  | "apple"
+  | "microsoft"
+  | "facebook";
 
 export interface SocialLoginOptions {
   redirectUri?: string;
@@ -428,25 +591,27 @@ export interface SocialLoginOptions {
 }
 
 // Factory function mock
-export async function createAuthrimClient(config: AuthrimClientConfig): Promise<AuthrimClient> {
+export async function createAuthrimClient(
+  config: AuthrimClientConfig,
+): Promise<AuthrimClient> {
   return {
     buildAuthorizationUrl: async (options) => ({
       url: `${config.issuer}/authorize?client_id=${config.clientId}&redirect_uri=${options.redirectUri}&state=mock-state&nonce=mock-nonce`,
-      state: options.exposeState ? 'mock-state' : undefined,
-      nonce: options.exposeState ? 'mock-nonce' : undefined,
+      state: options.exposeState ? "mock-state" : undefined,
+      nonce: options.exposeState ? "mock-nonce" : undefined,
     }),
     handleCallback: async () => ({
-      accessToken: 'mock-access-token',
-      tokenType: 'Bearer' as const,
+      accessToken: "mock-access-token",
+      tokenType: "Bearer" as const,
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
     }),
     logout: async () => ({}),
     on: () => () => {},
     token: {
-      getAccessToken: async () => 'mock-access-token',
+      getAccessToken: async () => "mock-access-token",
       getTokens: async () => ({
-        accessToken: 'mock-access-token',
-        tokenType: 'Bearer' as const,
+        accessToken: "mock-access-token",
+        tokenType: "Bearer" as const,
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
       isAuthenticated: async () => true,

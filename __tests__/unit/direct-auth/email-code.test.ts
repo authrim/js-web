@@ -141,12 +141,12 @@ describe('EmailCodeAuthImpl', () => {
     });
 
     it('should verify code successfully', async () => {
-      const mockVerifyResponse: HttpResponse<{ auth_code: string }> = {
+      const mockVerifyResponse: HttpResponse<{ direct_auth_artifact: string; expires_in: number }> = {
         ok: true,
         status: 200,
         statusText: 'OK',
         headers: {},
-        data: { auth_code: 'auth-code-123' },
+        data: { direct_auth_artifact: 'artifact-123', expires_in: 60 },
       };
       vi.mocked(mockHttp.fetch).mockResolvedValueOnce(mockVerifyResponse);
 
@@ -155,7 +155,24 @@ describe('EmailCodeAuthImpl', () => {
       expect(result.success).toBe(true);
       expect(result.session).toBeDefined();
       expect(result.user).toBeDefined();
-      expect(mockExchangeToken).toHaveBeenCalledWith('auth-code-123', expect.any(String));
+      expect(mockExchangeToken).toHaveBeenCalledWith('artifact-123', expect.any(String));
+    });
+
+    it('should reject legacy auth_code verify responses before token exchange', async () => {
+      const legacyVerifyResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        data: { auth_code: 'legacy-auth-code-123' },
+      } as unknown as HttpResponse<{ direct_auth_artifact: string; expires_in: number }>;
+      vi.mocked(mockHttp.fetch).mockResolvedValueOnce(legacyVerifyResponse);
+
+      const result = await emailCode.verify('test@example.com', '123456');
+
+      expect(result.success).toBe(false);
+      expect(result.error?.error).toBe('legacy_endpoint_not_supported');
+      expect(mockExchangeToken).not.toHaveBeenCalled();
     });
 
     it('should return error for invalid code format', async () => {

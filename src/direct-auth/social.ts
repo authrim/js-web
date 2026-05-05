@@ -16,9 +16,8 @@ import {
   type SocialProvider,
   type SocialLoginOptions,
   type AuthResult,
-  type Session,
-  type User,
 } from "@authrim/core";
+import type { AuthResultWithTokens, TokenOrSessionResult } from "./protocol.js";
 
 /**
  * Storage keys for social login state
@@ -44,13 +43,10 @@ export interface SocialAuthOptions {
   storage: AuthrimStorage;
   /** Token exchange callback */
   exchangeToken: (
-    authCode: string,
+    directAuthArtifact: string,
     codeVerifier: string,
     providerId?: string,
-  ) => Promise<{
-    session?: Session;
-    user?: User;
-  }>;
+  ) => Promise<TokenOrSessionResult>;
 }
 
 /**
@@ -368,7 +364,8 @@ export class SocialAuthImpl implements SocialAuth {
         success: true,
         session: result.session,
         user: result.user,
-      };
+        tokens: result.tokens,
+      } as AuthResultWithTokens;
     } catch (error) {
       this.logDeny("social_token_exchange_failed", {
         message: error instanceof Error ? error.message : String(error),
@@ -609,7 +606,8 @@ export class SocialAuthImpl implements SocialAuth {
         success: true,
         session: result.session,
         user: result.user,
-      });
+        tokens: result.tokens,
+      } as AuthResultWithTokens);
     } catch (error) {
       this.logDeny("social_token_exchange_failed", {
         message: error instanceof Error ? error.message : String(error),

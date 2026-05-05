@@ -1,12 +1,41 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createAuthrim } from '../../src/authrim.js';
 import type { AuthrimConfig } from '../../src/types.js';
+import { createAuthrimClient } from '@authrim/core';
+import { BrowserCryptoProvider } from '../../src/providers/crypto.js';
 
 // Mock the createAuthrimClient from @authrim/core
 vi.mock('@authrim/core', async () => {
   const actual = await vi.importActual('@authrim/core');
+  class StepUpClient {
+    start = vi.fn().mockResolvedValue({ challenge_id: 'mock-step-up-challenge' });
+    getAction = vi.fn().mockResolvedValue({ action: 'mock-action' });
+    complete = vi.fn().mockResolvedValue({ step_up_receipt: 'mock-step-up-receipt' });
+    resend = vi.fn().mockResolvedValue({ status: 'resent' });
+    cancel = vi.fn().mockResolvedValue({ status: 'cancelled' });
+  }
+  class CustomerProfileClient {
+    getWithElevationGrant = vi.fn().mockResolvedValue({ profile: { user_id: 'mock-user' } });
+    updateDelegated = vi.fn().mockResolvedValue({ customer_profile: { user_id: 'mock-user' } });
+  }
+  class DeviceInventoryClient {
+    list = vi.fn().mockResolvedValue({ devices: [] });
+    rename = vi.fn().mockResolvedValue({ device: { id: 'mock-device' } });
+    unlink = vi.fn().mockResolvedValue({
+      ok: true,
+      device_unlink_result: {
+        action: 'device_unlinked',
+        target_id: 'inst-current',
+        signed_out_required: true,
+        status: 'completed',
+      },
+    });
+  }
   return {
     ...actual,
+    StepUpClient,
+    CustomerProfileClient,
+    DeviceInventoryClient,
     createAuthrimClient: vi.fn().mockResolvedValue({
       buildAuthorizationUrl: vi.fn().mockResolvedValue({
         url: 'https://auth.example.com/authorize?client_id=test&redirect_uri=https://app.example.com/callback&state=mock-state&nonce=mock-nonce',
@@ -149,6 +178,50 @@ describe('createAuthrim', () => {
       expect(typeof auth.signOut).toBe('function');
     });
 
+    it('should expose devices namespace', async () => {
+      const auth = await createAuthrim({
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+      });
+
+      expect(auth.devices.list).toBeDefined();
+      expect(auth.devices.rename).toBeDefined();
+      expect(auth.devices.unlink).toBeDefined();
+    });
+
+    it('should clear the scoped DPoP key when unlinking the current device', async () => {
+      const clearSpy = vi
+        .spyOn(BrowserCryptoProvider.prototype, 'clearDPoPKeyPair')
+        .mockResolvedValue(undefined);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          ok: true,
+          device_unlink_result: {
+            action: 'device_unlinked',
+            target_id: 'inst-current',
+            signed_out_required: true,
+            status: 'completed',
+          },
+        }),
+      });
+
+      const auth = await createAuthrim({
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+      });
+      const result = await auth.devices.unlink('inst-current', {
+        accessToken: 'access-token',
+      });
+
+      expect(result.device_unlink_result.signed_out_required).toBe(true);
+      expect(clearSpy).toHaveBeenCalledTimes(1);
+      clearSpy.mockRestore();
+    });
+
     it('should expose event system', async () => {
       const auth = await createAuthrim({
         issuer: 'https://auth.example.com',
@@ -253,6 +326,119 @@ describe('createAuthrim', () => {
       expect(auth.oauth).toBeDefined();
       expect(auth.oauth!.handleSilentCallback).toBeDefined();
       expect(typeof auth.oauth!.handleSilentCallback).toBe('function');
+    });
+
+    it('should enable DPoP token requests by default for custom browser OAuth clients', async () => {
+      await createAuthrim({
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+      });
+
+      expect(vi.mocked(createAuthrimClient)).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          dpop: {
+            tokenRequests: true,
+            algorithm: 'ES256',
+          },
+        }),
+      );
+    });
+
+    it('should not enable DPoP token requests for explicit cookie fallback unless refresh tokens opt in', async () => {
+      await createAuthrim({
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+        browserPublicClientMode: 'cookie_fallback',
+      });
+
+      expect(vi.mocked(createAuthrimClient)).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          dpop: {
+            tokenRequests: false,
+            algorithm: 'ES256',
+          },
+        }),
+      );
+    });
+
+    it('should enable DPoP token requests when browser refresh tokens require DPoP binding', async () => {
+      await createAuthrim({
+        issuer: 'https://auth.example.com',
+        clientId: 'test-client-id',
+        enableOAuth: true,
+        browserPublicClientMode: 'cookie_fallback',
+        browserRefreshTokenPolicy: 'dpop_bound',
+      });
+
+      expect(vi.mocked(createAuthrimClient)).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          dpop: {
+            tokenRequests: true,
+            algorithm: 'ES256',
+          },
+        }),
+      );
+    });
+
+    it('should fail closed before OAuth token exchange when strict DPoP preflight fails', async () => {
+      const originalIndexedDB = globalThis.indexedDB;
+      Object.defineProperty(globalThis, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+
+      try {
+        const auth = await createAuthrim({
+          issuer: 'https://auth.example.com',
+          clientId: 'test-client-id',
+          enableOAuth: true,
+        });
+
+        const result = await auth.oauth!.handleCallback(
+          'https://app.example.com/callback?code=auth-code&state=state',
+        );
+
+        expect(result.data).toBeNull();
+        expect(result.error?.message).toContain(
+          'Browser DPoP preflight failed (indexeddb_unavailable)',
+        );
+      } finally {
+        Object.defineProperty(globalThis, 'indexedDB', {
+          value: originalIndexedDB,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should allow explicit cookie fallback OAuth callback without browser DPoP storage', async () => {
+      const originalIndexedDB = globalThis.indexedDB;
+      Object.defineProperty(globalThis, 'indexedDB', {
+        value: undefined,
+        configurable: true,
+      });
+
+      try {
+        const auth = await createAuthrim({
+          issuer: 'https://auth.example.com',
+          clientId: 'test-client-id',
+          enableOAuth: true,
+          browserPublicClientMode: 'cookie_fallback',
+        });
+
+        const result = await auth.oauth!.handleCallback(
+          'https://app.example.com/callback?code=auth-code&state=state',
+        );
+
+        expect(result.error).toBeNull();
+        expect(result.data?.accessToken).toBe('mock-access-token');
+      } finally {
+        Object.defineProperty(globalThis, 'indexedDB', {
+          value: originalIndexedDB,
+          configurable: true,
+        });
+      }
     });
   });
 

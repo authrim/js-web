@@ -33,20 +33,35 @@ export interface HandoffVerifyRequest {
   client_id: string;
 }
 
+export interface HandoffVerifyOptions {
+  /**
+   * Request optional response extensions.
+   *
+   * Wire format is exactly `include=session,user`.
+   */
+  include?: "session,user";
+  /**
+   * DPoP proof JWT for the handoff verify request.
+   *
+   * Phase 1 handoff JSON token path requires DPoP.
+   */
+  dpopProof?: string;
+}
+
 /**
  * Handoff verification response from server
  */
 export interface HandoffVerifyResponse {
-  token_type: "Bearer";
+  token_type: "Bearer" | "DPoP";
   access_token: string;
   expires_in: number;
-  session: {
+  session?: {
     id: string;
     userId: string;
     createdAt: string;
     expiresAt: string;
   };
-  user: {
+  user?: {
     id: string;
     email: string | null;
     name: string | null;
@@ -58,7 +73,7 @@ export interface HandoffVerifyResponse {
  * Handoff authentication implementation
  *
  * This class handles the verification of handoff tokens and manages
- * session storage through localStorage (same as SessionAuthImpl).
+ * token storage through the same policy as SessionAuthImpl.
  */
 export class HandoffAuthImpl {
   private diagnosticLogger?: IDiagnosticLogger | null;
@@ -67,7 +82,7 @@ export class HandoffAuthImpl {
     private readonly issuer: string,
     private readonly clientId: string,
     private readonly http: BrowserHttpClient,
-    private readonly getStorageKeyFn: () => string,
+    private readonly saveAccessToken: (accessToken: string) => void,
   ) {}
 
   setDiagnosticLogger(logger: IDiagnosticLogger | null | undefined): void {
@@ -91,15 +106,25 @@ export class HandoffAuthImpl {
     handoffToken: string,
     state: string,
     clientId: string,
+    options: HandoffVerifyOptions = {},
   ): Promise<HandoffVerifyResponse> {
     // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
     // this.diagnosticLogger?.log("info", "Handoff token verification started", {...});
 
+    const verifyUrl = new URL(`${this.issuer}/auth/external/handoff/verify`);
+    if (options.include === "session,user") {
+      verifyUrl.searchParams.set("include", "session,user");
+    }
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (options.dpopProof) {
+      headers.DPoP = options.dpopProof;
+    }
+
     const response = await this.http.fetch<HandoffVerifyResponse>(
-      `${this.issuer}/auth/external/handoff/verify`,
+      verifyUrl.toString(),
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           handoff_token: handoffToken,
           state: state,
@@ -137,7 +162,7 @@ export class HandoffAuthImpl {
    *
    * This is a convenience method that:
    * 1. Verifies the handoff token with state validation
-   * 2. Saves access token to localStorage (same as SessionAuthImpl)
+   * 2. Saves access token through the configured SessionAuthImpl storage policy
    * 3. Cleans up handoff-specific sessionStorage
    *
    * NOTE: Does NOT emit auth:login event (handled by caller in authrim.ts)
@@ -151,12 +176,23 @@ export class HandoffAuthImpl {
   async verifyAndSave(
     handoffToken: string,
     state: string,
+    options: HandoffVerifyOptions = {},
   ): Promise<{ session: Session; user: User; expiresAt: Date }> {
     // Step 1: Verify token (includes state validation)
-    const tokenData = await this.verify(handoffToken, state);
+    const tokenData = await this.verify(handoffToken, state, {
+      ...options,
+      include: "session,user",
+    });
 
-    // Step 2: Save to localStorage (same as SessionAuthImpl)
-    this.saveSession(tokenData.access_token);
+    if (!tokenData.session || !tokenData.user) {
+      throw new AuthrimError(
+        "invalid_response",
+        "Handoff verify response did not include session and user extensions",
+      );
+    }
+
+    // Step 2: Save access token using the configured session storage policy.
+    this.saveAccessToken(tokenData.access_token);
 
     // Step 3: Cleanup handoff-specific storage
     this.cleanupHandoffStorage();
@@ -186,6 +222,7 @@ export class HandoffAuthImpl {
   private async verify(
     handoffToken: string,
     state: string,
+    options: HandoffVerifyOptions = {},
   ): Promise<HandoffVerifyResponse> {
     // Validate state from handoff-specific namespace
     const savedState = sessionStorage.getItem(HANDOFF_STORAGE_KEYS.STATE);
@@ -203,26 +240,7 @@ export class HandoffAuthImpl {
       );
     }
 
-    return this.verifyToken(handoffToken, state, this.clientId);
-  }
-
-  /**
-   * Internal: Save session to localStorage
-   *
-   * Uses localStorage directly (same as SessionAuthImpl) to ensure
-   * storage key compatibility.
-   */
-  private saveSession(accessToken: string): void {
-    const storageKey = this.getStorageKeyFn();
-
-    // Use localStorage directly (same as SessionAuthImpl)
-    // This ensures storage key compatibility
-    try {
-      localStorage.setItem(storageKey, accessToken);
-    } catch {
-      // localStorage not available (e.g., private browsing)
-      console.warn("[Authrim] Failed to store handoff token in localStorage");
-    }
+    return this.verifyToken(handoffToken, state, this.clientId, options);
   }
 
   /**

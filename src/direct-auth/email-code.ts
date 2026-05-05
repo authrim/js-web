@@ -22,9 +22,13 @@ import {
   type EmailCodeSendResponse,
   type EmailCodeVerifyRequest,
   type EmailCodeVerifyResponse,
-  type Session,
-  type User,
 } from "@authrim/core";
+import type {
+  AuthResultWithTokens,
+  DirectAuthArtifactResponse,
+  TokenOrSessionResult,
+} from "./protocol.js";
+import { requireDirectAuthArtifactResponse } from "./protocol.js";
 import { getAuthrimCode, mapSeverity } from "../utils/error-mapping.js";
 
 /**
@@ -49,12 +53,9 @@ export interface EmailCodeAuthOptions {
   crypto: CryptoProvider;
   /** Token exchange callback */
   exchangeToken: (
-    authCode: string,
+    directAuthArtifact: string,
     codeVerifier: string,
-  ) => Promise<{
-    session?: Session;
-    user?: User;
-  }>;
+  ) => Promise<TokenOrSessionResult>;
 }
 
 /**
@@ -164,11 +165,12 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
     const { codeVerifier, codeChallenge } = await this.pkce.generatePKCE();
 
     // Send request to server
-    const request: EmailCodeSendRequest = {
+    const request: EmailCodeSendRequest & { channel: "browser" } = {
       client_id: this.clientId,
       email,
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
+      channel: "browser",
       locale: options?.locale,
     };
 
@@ -283,13 +285,14 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
 
     try {
       // Verify code with server
-      const request: EmailCodeVerifyRequest = {
+      const request: EmailCodeVerifyRequest & { channel: "browser" } = {
         attempt_id: state.attemptId,
         code,
         code_verifier: state.codeVerifier,
+        channel: "browser",
       };
 
-      const response = await this.http.fetch<EmailCodeVerifyResponse>(
+      const response = await this.http.fetch<EmailCodeVerifyResponse & DirectAuthArtifactResponse>(
         `${this.issuer}${ENDPOINTS.EMAIL_CODE_VERIFY}`,
         {
           method: "POST",
@@ -365,10 +368,12 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
       // Clear pending state on success
       this.pendingVerifications.delete(email.toLowerCase());
 
-      // Exchange auth_code for session
-      const { auth_code } = response.data;
-      const { session, user } = await this.exchangeToken(
-        auth_code,
+      // Exchange Direct Auth artifact for canonical tokens
+      const { direct_auth_artifact } = requireDirectAuthArtifactResponse(
+        response.data,
+      );
+      const { session, user, tokens } = await this.exchangeToken(
+        direct_auth_artifact,
         state.codeVerifier,
       );
 
@@ -376,7 +381,8 @@ export class EmailCodeAuthImpl implements EmailCodeAuth {
         success: true,
         session,
         user,
-      };
+        tokens,
+      } as AuthResultWithTokens;
     } catch (error) {
       this.logDeny("email_code_verify_failed", {
         message: error instanceof Error ? error.message : String(error),

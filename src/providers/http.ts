@@ -8,7 +8,7 @@
  */
 
 import type { HttpClient, HttpOptions, HttpResponse } from "@authrim/core";
-import { sanitizeJsonForLogging } from "../utils/sensitive-data.js";
+import { sanitizeForLogging, sanitizeJsonForLogging } from "../utils/sensitive-data.js";
 
 /**
  * Browser HTTP client options
@@ -67,7 +67,7 @@ export class BrowserHttpClient implements HttpClient {
       const sanitized =
         typeof data === "string"
           ? sanitizeJsonForLogging(data)
-          : JSON.stringify(data);
+          : JSON.stringify(sanitizeForLogging(data as Record<string, unknown>));
       // eslint-disable-next-line no-console
       console.debug(`[Authrim HTTP] ${message}`, sanitized);
     } else {

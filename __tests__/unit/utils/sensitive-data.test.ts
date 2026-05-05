@@ -51,10 +51,14 @@ describe('sensitive-data', () => {
       const obj = {
         access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test',
         refresh_token: 'refresh-token-12345678901234567890',
+        device_secret: 'device-secret-12345678901234567890',
+        actor_token: 'actor-token-12345678901234567890',
       };
       const result = sanitizeForLogging(obj);
       expect(result.access_token).toBe('eyJh...test');
       expect(result.refresh_token).toBe('refr...7890');
+      expect(result.device_secret).toBe('devi...7890');
+      expect(result.actor_token).toBe('acto...7890');
     });
 
     it('should mask password field', () => {

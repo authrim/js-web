@@ -19,7 +19,24 @@ import type {
   DirectAuthLogoutOptions,
   NextAction,
   IDiagnosticLogger,
+  StepUpActionResponse,
+  StepUpCompleteRequest,
+  StepUpIdempotentRequestOptions,
+  StepUpRequestOptions,
+  StepUpStartRequest,
+  CustomerProfileDelegatedWriteOptions,
+  CustomerProfileDelegatedWriteResponse,
+  CustomerProfileElevationReadOptions,
+  CustomerProfileElevationReadResponse,
+  CustomerProfileUpdateInput,
+  ListDevicesOptions,
+  ListDevicesResponse,
+  RenameDeviceOptions,
+  RenameDeviceResponse,
+  UnlinkDeviceOptions,
+  UnlinkDeviceResponse,
 } from "@authrim/core";
+import type { DirectAuthTokenResponsePhase1 } from "./direct-auth/protocol.js";
 
 // =============================================================================
 // Configuration Types
@@ -29,6 +46,8 @@ import type {
  * Storage type options
  */
 export type StorageType = "memory" | "sessionStorage" | "localStorage";
+export type BrowserPublicClientMode = "strict" | "cookie_fallback" | "legacy";
+export type BrowserRefreshTokenPolicy = "disabled" | "dpop_bound";
 
 /**
  * Storage options
@@ -37,7 +56,7 @@ export interface StorageOptions {
   /** Storage key prefix (default: 'authrim') */
   prefix?: string;
   /**
-   * Storage type (default: 'sessionStorage')
+   * Storage type (default: 'memory')
    *
    * - 'memory': Most secure, tab-scoped
    * - 'sessionStorage': Persists on reload, cleared on tab close
@@ -106,11 +125,25 @@ export interface AuthrimConfig {
   /**
    * Storage options
    *
-   * Default: sessionStorage (XSS-resistant)
-   * SPA: 'memory'
-   * Persistence: 'localStorage' (requires XSS protection)
+   * Default: 'memory'
+   * Reload persistence: 'sessionStorage' explicit opt-in
+   * Long persistence: 'localStorage' explicit opt-in and requires XSS protection
    */
   storage?: StorageOptions;
+  /**
+   * Browser public client security mode.
+   *
+   * Custom browser SDK clients default to 'strict'. Hosted/built-in flows may
+   * select 'cookie_fallback' at the integration boundary.
+   */
+  browserPublicClientMode?: BrowserPublicClientMode;
+  /**
+   * Browser refresh token issuance policy.
+   *
+   * Default: 'disabled'. Use 'dpop_bound' only when the browser can keep a
+   * stable non-extractable DPoP key for this issuer + client_id.
+   */
+  browserRefreshTokenPolicy?: BrowserRefreshTokenPolicy;
   /**
    * Redirect URI for silent login (cross-domain SSO)
    *
@@ -173,8 +206,9 @@ export type AuthResponse<T> =
  * Session data returned from authentication
  */
 export interface AuthSessionData {
-  session: Session;
-  user: User;
+  session?: Session;
+  user?: User;
+  tokens?: DirectAuthTokenResponsePhase1;
   nextAction?: NextAction;
 }
 
@@ -308,17 +342,32 @@ export interface SessionNamespace {
 /**
  * Handoff verification response from server
  */
+export interface HandoffVerifyOptions {
+  /**
+   * Request optional response extensions.
+   *
+   * Wire format is exactly `include=session,user`.
+   */
+  include?: "session,user";
+  /**
+   * DPoP proof JWT for the handoff verify request.
+   *
+   * Phase 1 handoff JSON token path requires DPoP.
+   */
+  dpopProof?: string;
+}
+
 export interface HandoffVerifyResponse {
-  token_type: "Bearer";
+  token_type: "Bearer" | "DPoP";
   access_token: string;
   expires_in: number;
-  session: {
+  session?: {
     id: string;
     userId: string;
     createdAt: string;
     expiresAt: string;
   };
-  user: {
+  user?: {
     id: string;
     email: string | null;
     name: string | null;
@@ -344,7 +393,8 @@ export interface HandoffNamespace {
    * @param handoffToken - Handoff token from URL parameter
    * @param state - State parameter for CSRF protection
    * @param clientId - OAuth client ID
-   * @returns Token response with session and user
+   * @param options - DPoP proof and optional `include=session,user` extension
+   * @returns Pure token response by default; session/user only when included
    * @throws {AuthrimError} HANDOFF_VERIFICATION_FAILED - Token verification failed
    * @throws {AuthrimError} HANDOFF_STATE_MISMATCH - State mismatch (CSRF attack)
    */
@@ -352,6 +402,7 @@ export interface HandoffNamespace {
     handoffToken: string,
     state: string,
     clientId: string,
+    options?: HandoffVerifyOptions,
   ): Promise<HandoffVerifyResponse>;
 
   /**
@@ -359,12 +410,13 @@ export interface HandoffNamespace {
    *
    * This is a convenience method that:
    * 1. Verifies the handoff token with state validation
-   * 2. Saves access token to localStorage (same as SessionAuthImpl)
+   * 2. Saves access token through the configured SessionAuthImpl storage policy
    * 3. Cleans up handoff-specific sessionStorage
    * 4. Emits auth:login event
    *
    * @param handoffToken - Handoff token from URL parameter
    * @param state - State parameter for CSRF protection
+   * @param options - DPoP proof for the request
    * @returns Session, user data, and expiration timestamp
    * @throws {AuthrimError} HANDOFF_VERIFICATION_FAILED - Token verification failed
    * @throws {AuthrimError} HANDOFF_STATE_MISMATCH - State mismatch (CSRF attack)
@@ -372,7 +424,76 @@ export interface HandoffNamespace {
   verifyAndSave(
     handoffToken: string,
     state: string,
+    options?: HandoffVerifyOptions,
   ): Promise<{ session: Session; user: User; expiresAt: Date }>;
+}
+
+export interface StepUpNamespace {
+  start(
+    request: StepUpStartRequest,
+    options?: StepUpRequestOptions,
+  ): Promise<StepUpActionResponse>;
+  getAction(
+    actionId: string,
+    options?: StepUpRequestOptions,
+  ): Promise<StepUpActionResponse>;
+  complete<Input = unknown>(
+    actionId: string,
+    request: StepUpCompleteRequest<Input>,
+    options?: StepUpIdempotentRequestOptions,
+  ): Promise<StepUpActionResponse>;
+  resend(
+    actionId: string,
+    options?: StepUpIdempotentRequestOptions,
+  ): Promise<StepUpActionResponse>;
+  cancel(
+    actionId: string,
+    options?: StepUpRequestOptions,
+  ): Promise<StepUpActionResponse>;
+}
+
+export interface CustomerProfilesNamespace {
+  getWithElevationGrant(
+    subjectUserId: string,
+    options: CustomerProfileElevationReadOptions,
+  ): Promise<CustomerProfileElevationReadResponse>;
+  updateDelegated(
+    subjectUserId: string,
+    input: CustomerProfileUpdateInput,
+    options: CustomerProfileDelegatedWriteOptions,
+  ): Promise<CustomerProfileDelegatedWriteResponse>;
+}
+
+export type BrowserListDevicesOptions = Omit<
+  ListDevicesOptions,
+  "accessToken"
+> & {
+  accessToken?: string;
+};
+export type BrowserRenameDeviceOptions = Omit<
+  RenameDeviceOptions,
+  "accessToken"
+> & {
+  accessToken?: string;
+};
+export type BrowserUnlinkDeviceOptions = Omit<
+  UnlinkDeviceOptions,
+  "accessToken"
+> & {
+  accessToken?: string;
+};
+
+export interface DevicesNamespace {
+  list(options?: BrowserListDevicesOptions): Promise<ListDevicesResponse>;
+  rename(
+    deviceId: string,
+    displayName: string,
+    options?: BrowserRenameDeviceOptions,
+  ): Promise<RenameDeviceResponse>;
+  unlink(
+    deviceId: string,
+    options?: BrowserUnlinkDeviceOptions,
+  ): Promise<UnlinkDeviceResponse>;
 }
 
 /**
@@ -434,6 +555,7 @@ export interface OAuthTokenSet {
   accessToken: string;
   idToken?: string;
   refreshToken?: string;
+  tokenType: "Bearer" | "DPoP";
   expiresAt: number;
   scope?: string;
 }
@@ -565,6 +687,9 @@ export interface AuthrimBase {
   social: SocialNamespace;
   session: SessionNamespace;
   handoff: HandoffNamespace;
+  stepUp: StepUpNamespace;
+  customerProfiles: CustomerProfilesNamespace;
+  devices: DevicesNamespace;
 
   // Shortcuts (syntactic sugar)
   signIn: SignInShortcuts;
@@ -615,6 +740,28 @@ export type {
   EmailCodeSendResult,
   EmailCodeVerifyOptions,
   SocialLoginOptions,
+  DirectAuthLogoutScope,
   DirectAuthLogoutOptions,
   NextAction,
+  StepUpAcceptableMethods,
+  StepUpActionResponse,
+  StepUpCompleteRequest,
+  StepUpFailureBody,
+  StepUpIdempotentRequestOptions,
+  StepUpNextAction,
+  StepUpRequestOptions,
+  StepUpRequirement,
+  StepUpResendResponse,
+  StepUpStartRequest,
+  CustomerProfileDelegatedWriteOptions,
+  CustomerProfileDelegatedWriteResponse,
+  CustomerProfileElevationReadOptions,
+  CustomerProfileElevationReadResponse,
+  CustomerProfileUpdateInput,
+  CustomerProfileView,
+  DeviceInventoryItem,
+  DeviceUnlinkResult,
+  ListDevicesResponse,
+  RenameDeviceResponse,
+  UnlinkDeviceResponse,
 } from "@authrim/core";

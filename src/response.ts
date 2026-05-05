@@ -12,6 +12,7 @@ import type {
   PasskeyCredential,
 } from "@authrim/core";
 import type { AuthResponse, AuthError, AuthSessionData } from "./types.js";
+import type { AuthResultWithTokens } from "./direct-auth/protocol.js";
 
 /**
  * Convert DirectAuthError to AuthError
@@ -82,10 +83,15 @@ export function failureFromParams<T>(params: {
 export function authResultToResponse(
   result: AuthResult,
 ): AuthResponse<AuthSessionData> {
-  if (result.success && result.session && result.user) {
+  const resultWithTokens = result as AuthResultWithTokens;
+  if (
+    result.success &&
+    ((result.session && result.user) || resultWithTokens.tokens)
+  ) {
     return success({
       session: result.session,
       user: result.user,
+      tokens: resultWithTokens.tokens,
       nextAction: result.nextAction,
     });
   }

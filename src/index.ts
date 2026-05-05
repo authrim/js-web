@@ -43,6 +43,12 @@ export type {
   SessionNamespace,
   HandoffNamespace,
   HandoffVerifyResponse,
+  StepUpNamespace,
+  CustomerProfilesNamespace,
+  DevicesNamespace,
+  BrowserListDevicesOptions,
+  BrowserRenameDeviceOptions,
+  BrowserUnlinkDeviceOptions,
 
   // Shortcuts
   SignInShortcuts,
@@ -92,7 +98,29 @@ export type {
   SocialLoginOptions,
 
   // Session
+  DirectAuthLogoutScope,
   DirectAuthLogoutOptions,
+  StepUpAcceptableMethods,
+  StepUpActionResponse,
+  StepUpCompleteRequest,
+  StepUpFailureBody,
+  StepUpIdempotentRequestOptions,
+  StepUpNextAction,
+  StepUpRequestOptions,
+  StepUpRequirement,
+  StepUpResendResponse,
+  StepUpStartRequest,
+  CustomerProfileDelegatedWriteOptions,
+  CustomerProfileDelegatedWriteResponse,
+  CustomerProfileElevationReadOptions,
+  CustomerProfileElevationReadResponse,
+  CustomerProfileUpdateInput,
+  CustomerProfileView,
+  DeviceInventoryItem,
+  DeviceUnlinkResult,
+  ListDevicesResponse,
+  RenameDeviceResponse,
+  UnlinkDeviceResponse,
 } from "./types.js";
 
 // =============================================================================

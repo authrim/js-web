@@ -1,8 +1,8 @@
 /**
  * Browser Storage Provider
  *
- * P2: デフォルトは sessionStorage (XSS耐性優先)
- * localStorage は明示的 opt-in のみ
+ * Phase 1: default is memory-only.
+ * Web Storage persistence is explicit opt-in only.
  */
 
 import type { AuthrimStorage } from "@authrim/core";
@@ -14,7 +14,7 @@ export interface BrowserStorageOptions {
   /** Storage key prefix (default: 'authrim') */
   prefix?: string;
   /**
-   * Storage type (default: 'sessionStorage')
+   * Storage type (default: 'memory')
    *
    * - 'memory': 最も安全。タブを閉じると消える。SPA推奨。
    * - 'sessionStorage': ページリロードで維持、タブを閉じると消える。
@@ -113,13 +113,13 @@ class WebStorage implements AuthrimStorage {
 /**
  * Create browser storage
  *
- * P2: デフォルトは sessionStorage (XSS耐性優先)
- * localStorage は明示的 opt-in のみ
+ * Phase 1: default is memory-only.
+ * sessionStorage / localStorage are explicit opt-in only.
  */
 export function createBrowserStorage(
   options?: BrowserStorageOptions,
 ): AuthrimStorage {
-  const storageType = options?.storage ?? "sessionStorage";
+  const storageType = options?.storage ?? "memory";
   const prefix = options?.prefix ?? "authrim";
 
   if (storageType === "memory") {
