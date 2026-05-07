@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@authrim/core':
-        specifier: ^0.1.14
-        version: 0.1.14
+        specifier: ^0.1.16
+        version: 0.1.16
     devDependencies:
       '@types/jsdom':
         specifier: ^27.0.0
@@ -51,8 +51,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@authrim/core@0.1.14':
-    resolution: {integrity: sha512-fvu9mFd6DrOM3BPehA8hKNcmoGwg/mR2BPESfHsFuQEEESUViKuXqKSY7hB+bTV7S/m9E/Hy4/wwq1OjgPzWUw==}
+  '@authrim/core@0.1.16':
+    resolution: {integrity: sha512-T6TG6AGCljNiPfA9SS2ou/hHaxcoA0Fg1feeAqn7VME/g0bO3I3m4Fmf3ltbD6hwLzxv8/J5BMdWJOW1BJNiJg==}
     engines: {node: '>=18'}
 
   '@csstools/color-helpers@5.1.0':
@@ -875,7 +875,7 @@ packages:
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   globals@13.24.0:
     resolution: {integrity: sha512-AhO5QUcj8llrbG09iWhPU2B204J1xnPeL8kQmVorSsy+Sjj1sk8gIyh6cUocGmH4L0UuhAJy+hJMRA4mgA4mFQ==}
@@ -1515,7 +1515,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@authrim/core@0.1.14': {}
+  '@authrim/core@0.1.16': {}
 
   '@csstools/color-helpers@5.1.0': {}
 
