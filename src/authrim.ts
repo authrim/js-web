@@ -34,12 +34,14 @@ import type {
   SocialNamespace,
   SessionNamespace,
   HandoffNamespace,
+  DevicesNamespace,
   SignOutOptions,
   OAuthNamespace,
   AuthResponse,
   AuthSessionData,
   TrySilentLoginOptions,
   SilentLoginResult,
+  BrowserPublicClientMode,
 } from "./types.js";
 
 import {
@@ -65,7 +67,14 @@ import {
 } from "./providers/storage.js";
 
 // OAuth-related imports (optional)
-import { createAuthrimClient, type TokenSet } from "@authrim/core";
+import {
+  AuthrimError,
+  CustomerProfileClient,
+  DeviceInventoryClient,
+  StepUpClient,
+  createAuthrimClient,
+  type TokenSet,
+} from "@authrim/core";
 import { IframeSilentAuth } from "./auth/iframe-silent-auth.js";
 import { PopupAuth } from "./auth/popup-auth.js";
 
@@ -147,7 +156,10 @@ export async function createAuthrim<T extends AuthrimConfig>(
 ): Promise<Authrim<T>> {
   // Initialize providers
   const http = new BrowserHttpClient();
-  const crypto = new BrowserCryptoProvider();
+  const crypto = new BrowserCryptoProvider({
+    issuer: config.issuer,
+    clientId: config.clientId,
+  });
   const storageOptions: BrowserStorageOptions = config.storage ?? {};
   const storage = createBrowserStorage(storageOptions);
 
@@ -159,6 +171,8 @@ export async function createAuthrim<T extends AuthrimConfig>(
     issuer: config.issuer,
     clientId: config.clientId,
     http,
+    tokenStorage:
+      config.storage?.storage === "sessionStorage" ? "sessionStorage" : "memory",
   });
 
   // Token exchange callback
@@ -205,7 +219,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     config.issuer,
     config.clientId,
     http,
-    () => sessionManager.getStorageKey(), // Storage key calculator
+    (accessToken) => sessionManager.setAccessToken(accessToken),
   );
 
   // ==========================================================================
@@ -216,7 +230,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     async login(options?: PasskeyLoginOptions) {
       const result = await passkeyImpl.login(options);
       const response = authResultToResponse(result);
-      if (response.data) {
+      if (response.data?.session && response.data?.user) {
         emitter.emit("auth:login", {
           session: response.data.session,
           user: response.data.user,
@@ -229,7 +243,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     async signUp(options: PasskeySignUpOptions) {
       const result = await passkeyImpl.signUp(options);
       const response = authResultToResponse(result);
-      if (response.data) {
+      if (response.data?.session && response.data?.user) {
         emitter.emit("auth:login", {
           session: response.data.session,
           user: response.data.user,
@@ -278,7 +292,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     ) {
       const result = await emailCodeImpl.verify(email, code, options);
       const response = authResultToResponse(result);
-      if (response.data) {
+      if (response.data?.session && response.data?.user) {
         emitter.emit("auth:login", {
           session: response.data.session,
           user: response.data.user,
@@ -312,7 +326,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     ) {
       const result = await socialImpl.loginWithPopup(provider, options);
       const response = authResultToResponse(result);
-      if (response.data) {
+      if (response.data?.session && response.data?.user) {
         emitter.emit("auth:login", {
           session: response.data.session,
           user: response.data.user,
@@ -332,7 +346,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
     async handleCallback() {
       const result = await socialImpl.handleCallback();
       const response = authResultToResponse(result);
-      if (response.data) {
+      if (response.data?.session && response.data?.user) {
         emitter.emit("auth:login", {
           session: response.data.session,
           user: response.data.user,
@@ -403,12 +417,12 @@ export async function createAuthrim<T extends AuthrimConfig>(
   // ==========================================================================
 
   const handoff: HandoffNamespace = {
-    async verify(handoffToken: string, state: string, clientId: string) {
-      return handoffImpl.verifyToken(handoffToken, state, clientId);
+    async verify(handoffToken: string, state: string, clientId: string, options) {
+      return handoffImpl.verifyToken(handoffToken, state, clientId, options);
     },
 
-    async verifyAndSave(handoffToken: string, state: string) {
-      const result = await handoffImpl.verifyAndSave(handoffToken, state);
+    async verifyAndSave(handoffToken: string, state: string, options) {
+      const result = await handoffImpl.verifyAndSave(handoffToken, state, options);
 
       // Emit auth:login event (handled at authrim.ts level, not in impl)
       emitter.emit("auth:login", {
@@ -428,6 +442,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
   async function signOut(options?: SignOutOptions): Promise<void> {
     // Clear session first
     await sessionManager.logout(options);
+    await crypto.clearDPoPKeyPair();
 
     // Emit logout event after clearing session
     emitter.emit("auth:logout", { redirectUri: options?.redirectUri });
@@ -444,6 +459,43 @@ export async function createAuthrim<T extends AuthrimConfig>(
     return emitter.on(event, handler);
   }
 
+  const stepUpClient = new StepUpClient({
+    issuer: config.issuer,
+    http,
+  });
+  const customerProfiles = new CustomerProfileClient({
+    issuer: config.issuer,
+    http,
+  });
+  const deviceInventoryClient = new DeviceInventoryClient({
+    issuer: config.issuer,
+    http,
+  });
+  const devices: DevicesNamespace = {
+    list(options) {
+      return deviceInventoryClient.list({
+        ...(options ?? {}),
+        accessToken: resolveDeviceInventoryAccessToken(sessionManager, options?.accessToken),
+      });
+    },
+    rename(deviceId, displayName, options) {
+      return deviceInventoryClient.rename(deviceId, displayName, {
+        ...(options ?? {}),
+        accessToken: resolveDeviceInventoryAccessToken(sessionManager, options?.accessToken),
+      });
+    },
+    async unlink(deviceId, options) {
+      const result = await deviceInventoryClient.unlink(deviceId, {
+        ...(options ?? {}),
+        accessToken: resolveDeviceInventoryAccessToken(sessionManager, options?.accessToken),
+      });
+      if (result.device_unlink_result.signed_out_required) {
+        await crypto.clearDPoPKeyPair();
+      }
+      return result;
+    },
+  };
+
   // ==========================================================================
   // Base Client
   // ==========================================================================
@@ -454,6 +506,9 @@ export async function createAuthrim<T extends AuthrimConfig>(
     social,
     session,
     handoff,
+    stepUp: stepUpClient,
+    customerProfiles,
+    devices,
     signIn: createShortcuts.signIn(passkey, social),
     signUp: createShortcuts.signUp(passkey),
     signOut,
@@ -485,6 +540,20 @@ export async function createAuthrim<T extends AuthrimConfig>(
   return baseClient as Authrim<T>;
 }
 
+function resolveDeviceInventoryAccessToken(
+  sessionManager: SessionAuthImpl,
+  explicitAccessToken?: string,
+): string {
+  const token = explicitAccessToken ?? sessionManager.getToken();
+  if (!token) {
+    throw new AuthrimError(
+      "invalid_request",
+      "Device inventory requests require an authenticated session or explicit accessToken",
+    );
+  }
+  return token;
+}
+
 /**
  * Create OAuth namespace (internal)
  */
@@ -493,7 +562,10 @@ async function createOAuthNamespace(
   emitter: AuthEventEmitter,
 ): Promise<OAuthNamespace> {
   const http = new BrowserHttpClient();
-  const crypto = new BrowserCryptoProvider();
+  const crypto = new BrowserCryptoProvider({
+    issuer: config.issuer,
+    clientId: config.clientId,
+  });
   const storageOptions: BrowserStorageOptions = config.storage ?? {};
   const storage = createBrowserStorage(storageOptions);
 
@@ -511,12 +583,18 @@ async function createOAuthNamespace(
   }
 
   // Create core OAuth client
+  const browserPublicClientMode = resolveBrowserPublicClientMode(config);
+  const useDPoPTokenRequests = shouldUseDPoPTokenRequests(config);
   const coreClient = await createAuthrimClient({
     issuer: config.issuer,
     clientId: config.clientId,
     http,
     crypto,
     storage,
+    dpop: {
+      tokenRequests: useDPoPTokenRequests,
+      algorithm: "ES256",
+    },
   });
 
   // Set up diagnostic logging if enabled
@@ -565,6 +643,7 @@ async function createOAuthNamespace(
 
     async handleCallback(url: string) {
       try {
+        await ensureBrowserDPoPPreflight(crypto, browserPublicClientMode, useDPoPTokenRequests);
         const tokens = await coreClient.handleCallback(url);
         return success(tokenSetToResponse(tokens));
       } catch (error) {
@@ -583,6 +662,7 @@ async function createOAuthNamespace(
     silentAuth: {
       async check(options) {
         try {
+          await ensureBrowserDPoPPreflight(crypto, browserPublicClientMode, useDPoPTokenRequests);
           const result = await silentAuth.check({
             redirectUri: options.redirectUri,
             timeout: options.timeoutMs,
@@ -635,6 +715,7 @@ async function createOAuthNamespace(
     popup: {
       async login(options) {
         try {
+          await ensureBrowserDPoPPreflight(crypto, browserPublicClientMode, useDPoPTokenRequests);
           const tokens = await popupAuth.login({
             redirectUri: options?.redirectUri,
             scope: options?.scopes?.join(" "),
@@ -832,6 +913,7 @@ async function createOAuthNamespace(
       const code = params.get("code");
       if (code) {
         try {
+          await ensureBrowserDPoPPreflight(crypto, browserPublicClientMode, useDPoPTokenRequests);
           await coreClient.handleCallback(window.location.href);
           // Clear sso_attempted flag on success
           sessionStorage.removeItem("sso_attempted");
@@ -857,6 +939,39 @@ async function createOAuthNamespace(
   };
 }
 
+function resolveBrowserPublicClientMode(config: AuthrimConfig): BrowserPublicClientMode {
+  return config.browserPublicClientMode ?? "strict";
+}
+
+function shouldUseDPoPTokenRequests(config: AuthrimConfig): boolean {
+  const mode = resolveBrowserPublicClientMode(config);
+  return mode === "strict" || config.browserRefreshTokenPolicy === "dpop_bound";
+}
+
+async function ensureBrowserDPoPPreflight(
+  crypto: BrowserCryptoProvider,
+  mode: BrowserPublicClientMode,
+  dpopTokenRequests: boolean,
+): Promise<void> {
+  if (!dpopTokenRequests) {
+    return;
+  }
+
+  const result = await crypto.preflightDPoPKeyPersistence("ES256");
+  if (result.ok) {
+    return;
+  }
+
+  const suffix = result.message ? `: ${result.message}` : "";
+  const reason = result.reason ?? "unknown";
+  if (mode === "cookie_fallback") {
+    throw new Error(
+      `Browser DPoP preflight failed (${reason})${suffix}; use the hosted cookie-only finalize path for this client.`,
+    );
+  }
+  throw new Error(`Browser DPoP preflight failed (${reason})${suffix}`);
+}
+
 /**
  * Check if returnTo URL is safe (same origin)
  * Prevents open redirect attacks
@@ -877,6 +992,7 @@ function tokenSetToResponse(tokens: TokenSet): {
   accessToken: string;
   idToken?: string;
   refreshToken?: string;
+  tokenType: "Bearer" | "DPoP";
   expiresAt: number;
   scope?: string;
 } {
@@ -884,6 +1000,7 @@ function tokenSetToResponse(tokens: TokenSet): {
     accessToken: tokens.accessToken,
     idToken: tokens.idToken,
     refreshToken: tokens.refreshToken,
+    tokenType: tokens.tokenType,
     expiresAt: tokens.expiresAt,
     scope: tokens.scope,
   };

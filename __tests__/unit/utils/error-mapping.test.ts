@@ -3,6 +3,7 @@ import {
   ERROR_CODE_MAP,
   getAuthrimCode,
   mapSeverity,
+  normalizePasskeyErrorCode,
 } from '../../../src/utils/error-mapping.js';
 
 describe('error-mapping', () => {
@@ -18,10 +19,10 @@ describe('error-mapping', () => {
     });
 
     it('should have passkey error codes', () => {
-      expect(ERROR_CODE_MAP.passkey_not_found).toBe('AR003001');
-      expect(ERROR_CODE_MAP.passkey_verification_failed).toBe('AR003002');
+      expect(ERROR_CODE_MAP.passkey_no_credential).toBe('AR003001');
       expect(ERROR_CODE_MAP.passkey_not_supported).toBe('AR003003');
-      expect(ERROR_CODE_MAP.passkey_cancelled).toBe('AR003004');
+      expect(ERROR_CODE_MAP.passkey_user_canceled).toBe('AR003004');
+      expect(ERROR_CODE_MAP.passkey_invalid_credential).toBe('AR003005');
     });
 
     it('should have social login error codes', () => {
@@ -35,8 +36,14 @@ describe('error-mapping', () => {
     it('should return correct code for known error', () => {
       expect(getAuthrimCode('network_error')).toBe('AR001001');
       expect(getAuthrimCode('email_code_invalid')).toBe('AR002001');
-      expect(getAuthrimCode('passkey_not_found')).toBe('AR003001');
+      expect(getAuthrimCode('passkey_no_credential')).toBe('AR003001');
       expect(getAuthrimCode('popup_blocked')).toBe('AR004001');
+    });
+
+    it('should normalize removed passkey errors before looking up display codes', () => {
+      expect(getAuthrimCode('passkey_not_found')).toBe('AR003001');
+      expect(getAuthrimCode('passkey_cancelled')).toBe('AR003004');
+      expect(getAuthrimCode('passkey_verification_failed')).toBe('AR003005');
     });
 
     it('should return default code for unknown error', () => {
@@ -68,6 +75,17 @@ describe('error-mapping', () => {
     it('should return error for unknown severity', () => {
       // @ts-expect-error - testing invalid input
       expect(mapSeverity('unknown')).toBe('error');
+    });
+  });
+
+  describe('normalizePasskeyErrorCode', () => {
+    it('should map removed public errors to canonical passkey errors', () => {
+      expect(normalizePasskeyErrorCode('passkey_not_found')).toBe('passkey_no_credential');
+      expect(normalizePasskeyErrorCode('passkey_cancelled')).toBe('passkey_user_canceled');
+      expect(normalizePasskeyErrorCode('passkey_verification_failed')).toBe(
+        'passkey_invalid_credential',
+      );
+      expect(normalizePasskeyErrorCode('passkey_timeout')).toBe('passkey_timeout');
     });
   });
 });

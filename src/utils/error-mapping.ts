@@ -19,11 +19,13 @@ export const ERROR_CODE_MAP = {
   challenge_invalid: "AR002005",
 
   // Passkey errors (AR003xxx)
-  passkey_not_found: "AR003001",
-  passkey_verification_failed: "AR003002",
+  passkey_no_credential: "AR003001",
   passkey_not_supported: "AR003003",
-  passkey_cancelled: "AR003004",
+  passkey_user_canceled: "AR003004",
   passkey_invalid_credential: "AR003005",
+  passkey_timeout: "AR003006",
+  passkey_not_allowed: "AR003007",
+  passkey_uv_required: "AR003008",
 
   // Social login errors (AR004xxx)
   popup_blocked: "AR004001",
@@ -36,13 +38,37 @@ export const ERROR_CODE_MAP = {
 } as const;
 
 /**
+ * Removed public passkey errors and their canonical Phase 1 replacements.
+ */
+export const LEGACY_PASSKEY_ERROR_MAP = {
+  passkey_cancelled: "passkey_user_canceled",
+  passkey_not_found: "passkey_no_credential",
+  passkey_verification_failed: "passkey_invalid_credential",
+} as const;
+
+/**
+ * Normalize removed passkey error names to their canonical public codes.
+ */
+export function normalizePasskeyErrorCode(code: string): string {
+  return (
+    LEGACY_PASSKEY_ERROR_MAP[
+      code as keyof typeof LEGACY_PASSKEY_ERROR_MAP
+    ] ?? code
+  );
+}
+
+/**
  * Get Authrim error code from error string
  *
  * @param code - Error code string
  * @param defaultCode - Default code to return if not found (default: 'AR000000')
  */
 export function getAuthrimCode(code: string, defaultCode = "AR000000"): string {
-  return ERROR_CODE_MAP[code as keyof typeof ERROR_CODE_MAP] || defaultCode;
+  const normalizedCode = normalizePasskeyErrorCode(code);
+  return (
+    ERROR_CODE_MAP[normalizedCode as keyof typeof ERROR_CODE_MAP] ||
+    defaultCode
+  );
 }
 
 /**

@@ -292,12 +292,12 @@ describe('PasskeyAuthImpl', () => {
         },
       };
 
-      const mockFinishResponse: HttpResponse<{ auth_code: string }> = {
+      const mockFinishResponse: HttpResponse<{ direct_auth_artifact: string; expires_in: number }> = {
         ok: true,
         status: 200,
         statusText: 'OK',
         headers: {},
-        data: { auth_code: 'auth-code-123' },
+        data: { direct_auth_artifact: 'artifact-123', expires_in: 60 },
       };
 
       vi.mocked(mockHttp.fetch)
@@ -320,7 +320,54 @@ describe('PasskeyAuthImpl', () => {
       expect(result.success).toBe(true);
       expect(result.session).toBeDefined();
       expect(result.user).toBeDefined();
-      expect(mockExchangeToken).toHaveBeenCalledWith('auth-code-123', expect.any(String));
+      expect(mockExchangeToken).toHaveBeenCalledWith('artifact-123', expect.any(String));
+    });
+
+    it('should reject legacy auth_code finish responses before token exchange', async () => {
+      const mockStartResponse: HttpResponse<{
+        challenge_id: string;
+        options: {
+          challenge: string;
+          timeout: number;
+          rpId: string;
+          allowCredentials?: Array<{ type: string; id: string; transports?: string[] }>;
+          userVerification?: string;
+        };
+      }> = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        data: {
+          challenge_id: 'challenge-123',
+          options: {
+            challenge: 'YWJjZGVm',
+            timeout: 60000,
+            rpId: 'example.com',
+            allowCredentials: [],
+            userVerification: 'preferred',
+          },
+        },
+      };
+      const legacyFinishResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        data: { auth_code: 'legacy-auth-code-123' },
+      } as unknown as HttpResponse<{ direct_auth_artifact: string; expires_in: number }>;
+
+      vi.mocked(mockHttp.fetch)
+        .mockResolvedValueOnce(mockStartResponse)
+        .mockResolvedValueOnce(legacyFinishResponse);
+      const mockCredential = createMockCredential('assertion');
+      vi.mocked(globalThis.navigator.credentials.get).mockResolvedValue(mockCredential as unknown as Credential);
+
+      const result = await passkey.login();
+
+      expect(result.success).toBe(false);
+      expect(result.error?.error).toBe('legacy_endpoint_not_supported');
+      expect(mockExchangeToken).not.toHaveBeenCalled();
     });
 
     it('should handle network error in start request', async () => {
@@ -387,7 +434,7 @@ describe('PasskeyAuthImpl', () => {
       const result = await testPasskey.login();
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('passkey_cancelled');
+      expect(result.error?.error).toBe('passkey_user_canceled');
       expect(result.error?.code).toBe('AR003004');
     });
 
@@ -431,7 +478,7 @@ describe('PasskeyAuthImpl', () => {
       const result = await testPasskey.login();
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('passkey_cancelled');
+      expect(result.error?.error).toBe('passkey_user_canceled');
     });
 
     it('should handle null credential response', async () => {
@@ -471,7 +518,7 @@ describe('PasskeyAuthImpl', () => {
       const result = await testPasskey.login();
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('passkey_not_found');
+      expect(result.error?.error).toBe('passkey_no_credential');
       expect(result.error?.code).toBe('AR003001');
     });
 
@@ -524,7 +571,7 @@ describe('PasskeyAuthImpl', () => {
       const result = await testPasskey.login();
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('passkey_verification_failed');
+      expect(result.error?.error).toBe('passkey_invalid_credential');
     });
   });
 
@@ -590,12 +637,12 @@ describe('PasskeyAuthImpl', () => {
         },
       };
 
-      const mockFinishResponse: HttpResponse<{ auth_code: string }> = {
+      const mockFinishResponse: HttpResponse<{ direct_auth_artifact: string; expires_in: number }> = {
         ok: true,
         status: 200,
         statusText: 'OK',
         headers: {},
-        data: { auth_code: 'auth-code-123' },
+        data: { direct_auth_artifact: 'artifact-123', expires_in: 60 },
       };
 
       vi.mocked(mockHttp.fetch)
@@ -670,7 +717,7 @@ describe('PasskeyAuthImpl', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error?.error).toBe('passkey_cancelled');
+      expect(result.error?.error).toBe('passkey_user_canceled');
     });
 
     it('should handle null credential during signup', async () => {

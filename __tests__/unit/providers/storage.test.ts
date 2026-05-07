@@ -55,13 +55,28 @@ describe('BrowserStorage', () => {
     });
   });
 
+  describe('Default Storage', () => {
+    beforeEach(() => {
+      sessionStorage.clear();
+    });
+
+    it('should use memory storage by default', async () => {
+      const storage = createBrowserStorage();
+
+      await storage.set('test', 'value');
+
+      expect(await storage.get('test')).toBe('value');
+      expect(sessionStorage.getItem('authrim:test')).toBeNull();
+    });
+  });
+
   describe('WebStorage (sessionStorage)', () => {
     beforeEach(() => {
       sessionStorage.clear();
     });
 
-    it('should use sessionStorage by default', async () => {
-      const storage = createBrowserStorage();
+    it('should use sessionStorage when specified', async () => {
+      const storage = createBrowserStorage({ storage: 'sessionStorage' });
 
       await storage.set('test', 'value');
 
@@ -69,7 +84,7 @@ describe('BrowserStorage', () => {
     });
 
     it('should use custom prefix', async () => {
-      const storage = createBrowserStorage({ prefix: 'custom' });
+      const storage = createBrowserStorage({ storage: 'sessionStorage', prefix: 'custom' });
 
       await storage.set('test', 'value');
 
@@ -77,7 +92,7 @@ describe('BrowserStorage', () => {
     });
 
     it('should retrieve values', async () => {
-      const storage = createBrowserStorage();
+      const storage = createBrowserStorage({ storage: 'sessionStorage' });
 
       sessionStorage.setItem('authrim:test', 'stored-value');
       const value = await storage.get('test');
@@ -86,7 +101,7 @@ describe('BrowserStorage', () => {
     });
 
     it('should remove values', async () => {
-      const storage = createBrowserStorage();
+      const storage = createBrowserStorage({ storage: 'sessionStorage' });
 
       sessionStorage.setItem('authrim:test', 'value');
       await storage.remove('test');
@@ -95,7 +110,7 @@ describe('BrowserStorage', () => {
     });
 
     it('should get all prefixed values', async () => {
-      const storage = createBrowserStorage();
+      const storage = createBrowserStorage({ storage: 'sessionStorage' });
 
       sessionStorage.setItem('authrim:key1', 'value1');
       sessionStorage.setItem('authrim:key2', 'value2');
@@ -110,7 +125,7 @@ describe('BrowserStorage', () => {
     });
 
     it('should clear only prefixed values', async () => {
-      const storage = createBrowserStorage();
+      const storage = createBrowserStorage({ storage: 'sessionStorage' });
 
       sessionStorage.setItem('authrim:key1', 'value1');
       sessionStorage.setItem('other:key2', 'value2');

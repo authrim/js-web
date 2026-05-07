@@ -2,7 +2,7 @@
  * Session Management for Direct Auth
  *
  * Token-based authentication for cross-domain compatibility.
- * Stores access_token in localStorage and uses Authorization header.
+ * Stores access_token in memory and uses Authorization header.
  *
  * This approach works across:
  * - Chrome (with third-party cookie deprecation)
@@ -16,17 +16,20 @@ import {
   type SessionAuth,
   type Session,
   type DirectAuthLogoutOptions,
-  type DirectAuthTokenRequest,
-  type DirectAuthTokenResponse,
   type User,
 } from "@authrim/core";
 import type { BrowserHttpClient } from "../providers/http.js";
+import type {
+  DirectAuthTokenRequestPhase1,
+  DirectAuthTokenResponsePhase1,
+  TokenOrSessionResult,
+} from "./protocol.js";
 
 /**
  * Direct Auth API endpoints
  */
 const ENDPOINTS = {
-  TOKEN: "/api/v1/auth/direct/token",
+  TOKEN: "/token",
   SESSION: "/api/v1/auth/direct/session",
   LOGOUT: "/api/v1/auth/direct/logout",
 };
@@ -46,6 +49,13 @@ export interface SessionManagerOptions {
   clientId: string;
   /** HTTP client */
   http: BrowserHttpClient;
+  /**
+   * Access token storage policy.
+   *
+   * Default is memory-only. sessionStorage is explicit opt-in for custom
+   * browser clients that accept reload persistence.
+   */
+  tokenStorage?: "memory" | "sessionStorage";
 }
 
 /**
@@ -67,14 +77,18 @@ function getStorageKey(issuer: string, clientId: string): string {
 /**
  * Session authentication implementation
  *
- * Uses token-based authentication with localStorage for cross-domain compatibility.
+ * Uses token-based authentication with memory-only access token storage by
+ * default. sessionStorage reload persistence is available only as explicit
+ * opt-in for custom browser clients.
  */
 export class SessionAuthImpl implements SessionAuth {
   private readonly issuer: string;
   private readonly clientId: string;
   private readonly http: BrowserHttpClient;
   private readonly storageKey: string;
+  private readonly tokenStorage: "memory" | "sessionStorage";
   private diagnosticLogger: IDiagnosticLogger | null = null;
+  private memoryToken: string | null = null;
 
   // Cached session
   private cachedSession: Session | null = null;
@@ -87,6 +101,7 @@ export class SessionAuthImpl implements SessionAuth {
     this.clientId = options.clientId;
     this.http = options.http;
     this.storageKey = getStorageKey(options.issuer, options.clientId);
+    this.tokenStorage = options.tokenStorage ?? "memory";
   }
 
   /**
@@ -97,37 +112,56 @@ export class SessionAuthImpl implements SessionAuth {
   }
 
   /**
-   * Get stored access token from localStorage
+   * Get stored access token according to the configured token storage policy.
    */
   private getStoredToken(): string | null {
+    if (this.memoryToken) {
+      return this.memoryToken;
+    }
+    if (this.tokenStorage !== "sessionStorage") {
+      return null;
+    }
     try {
-      return localStorage.getItem(this.storageKey);
+      return sessionStorage.getItem(this.storageKey);
     } catch {
-      // localStorage not available (e.g., private browsing in some browsers)
       return null;
     }
   }
 
   /**
-   * Store access token in localStorage
+   * Store access token according to the configured token storage policy.
    */
   private storeToken(token: string): void {
-    try {
-      localStorage.setItem(this.storageKey, token);
-    } catch {
-      // localStorage not available
-      console.warn("[Authrim] Failed to store token in localStorage");
+    this.memoryToken = token;
+    if (this.tokenStorage === "sessionStorage") {
+      try {
+        sessionStorage.setItem(this.storageKey, token);
+      } catch {
+        // Keep the in-memory token even when sessionStorage is unavailable.
+      }
     }
   }
 
   /**
-   * Remove stored token from localStorage
+   * Accept a token from an adjacent auth flow such as handoff.
+   *
+   * @internal
+   */
+  setAccessToken(token: string): void {
+    this.storeToken(token);
+  }
+
+  /**
+   * Remove stored token.
    */
   private removeStoredToken(): void {
-    try {
-      localStorage.removeItem(this.storageKey);
-    } catch {
-      // localStorage not available
+    this.memoryToken = null;
+    if (this.tokenStorage === "sessionStorage") {
+      try {
+        sessionStorage.removeItem(this.storageKey);
+      } catch {
+        // sessionStorage may be unavailable.
+      }
     }
   }
 
@@ -160,7 +194,7 @@ export class SessionAuthImpl implements SessionAuth {
         },
       });
 
-      if (!response.ok || !response.data) {
+      if (!response.ok || !response.data?.session) {
         // Token might be invalid or expired
         if (response.status === 401) {
           this.removeStoredToken();
@@ -225,12 +259,16 @@ export class SessionAuthImpl implements SessionAuth {
         const requestBody: {
           client_id: string;
           revoke_tokens?: boolean;
+          logout_scope?: DirectAuthLogoutOptions["logoutScope"];
         } = {
           client_id: this.clientId,
         };
 
         if (options?.revokeTokens !== undefined) {
           requestBody.revoke_tokens = options.revokeTokens;
+        }
+        if (options?.logoutScope) {
+          requestBody.logout_scope = options.logoutScope;
         }
 
         await this.http.fetch(`${this.issuer}${ENDPOINTS.LOGOUT}`, {
@@ -241,9 +279,8 @@ export class SessionAuthImpl implements SessionAuth {
           },
           body: JSON.stringify(requestBody),
         });
-      } catch (error) {
-        // Log error but don't throw - logout should succeed client-side anyway
-        console.warn("Logout request failed:", error);
+      } catch {
+        // Logout should still clear client-side state when server notification fails.
       }
     }
 
@@ -260,36 +297,49 @@ export class SessionAuthImpl implements SessionAuth {
   }
 
   /**
-   * Exchange auth_code for tokens/session
+   * Exchange Direct Auth artifact for canonical OAuth/OIDC tokens.
    *
    * This is used internally by auth methods after successful authentication.
-   * Stores access_token in localStorage for subsequent requests.
+   * Stores access_token in memory for subsequent requests.
    */
   async exchangeToken(
-    authCode: string,
+    directAuthArtifact: string,
     codeVerifier: string,
     requestRefreshToken?: boolean,
     providerId?: string,
-  ): Promise<{ session?: Session; user?: User }> {
-    const request: DirectAuthTokenRequest = {
-      grant_type: "authorization_code",
-      code: authCode,
+  ): Promise<TokenOrSessionResult> {
+    const request: DirectAuthTokenRequestPhase1 = {
+      grant_type: "urn:authrim:params:oauth:grant-type:direct-auth-finish",
+      direct_auth_artifact: directAuthArtifact,
       client_id: this.clientId,
       code_verifier: codeVerifier,
-      request_refresh_token: requestRefreshToken,
+      channel: "browser",
     };
     if (providerId) {
       request.provider_id = providerId;
     }
 
+    const body = new URLSearchParams();
+    body.set("grant_type", request.grant_type);
+    body.set("direct_auth_artifact", request.direct_auth_artifact);
+    body.set("client_id", request.client_id);
+    body.set("code_verifier", request.code_verifier);
+    body.set("channel", request.channel);
+    if (request.provider_id) {
+      body.set("provider_id", request.provider_id);
+    }
+    if (requestRefreshToken) {
+      body.set("resource", this.clientId);
+    }
+
     let response;
     try {
-      response = await this.http.fetch<DirectAuthTokenResponse>(
+      response = await this.http.fetch<DirectAuthTokenResponsePhase1>(
         `${this.issuer}${ENDPOINTS.TOKEN}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(request),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
         },
       );
     } catch (error) {
@@ -349,24 +399,13 @@ export class SessionAuthImpl implements SessionAuth {
       flow: "direct",
     });
 
-    // Store access_token in localStorage for subsequent requests
+    // Store access_token in memory for subsequent requests
     if (tokenResponse.access_token) {
       this.storeToken(tokenResponse.access_token);
     }
 
-    // Cache session if provided
-    if (tokenResponse.session) {
-      this.cachedSession = tokenResponse.session;
-      this.sessionCacheExpiry = Date.now() + this.SESSION_CACHE_TTL;
-    }
-
-    if (tokenResponse.user) {
-      this.cachedUser = tokenResponse.user;
-    }
-
     return {
-      session: tokenResponse.session,
-      user: tokenResponse.user,
+      tokens: tokenResponse,
     };
   }
 
@@ -416,7 +455,7 @@ export class SessionAuthImpl implements SessionAuth {
    * @internal This exposes internal storage key calculation for advanced use cases.
    * The storage key format may change in future versions.
    *
-   * @returns Storage key used for localStorage
+   * @returns Storage key used when sessionStorage token persistence is enabled
    */
   getStorageKey(): string {
     return this.storageKey;

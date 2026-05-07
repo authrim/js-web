@@ -37,8 +37,8 @@ export interface BrowserDirectAuthConfig extends DirectAuthClientConfig {
   /**
    * Storage options
    *
-   * デフォルト: sessionStorage (XSS耐性優先)
-   * SPA推奨: 'memory'
+   * デフォルト: memory
+   * access token reload persistence は明示的な 'sessionStorage' opt-in のみ。
    */
   storage?: BrowserStorageOptions;
 }
@@ -133,7 +133,10 @@ export function createDirectAuthClient(
 ): BrowserDirectAuthClient {
   // Initialize providers
   const http = new BrowserHttpClient();
-  const crypto = new BrowserCryptoProvider();
+  const crypto = new BrowserCryptoProvider({
+    issuer: config.issuer,
+    clientId: config.clientId,
+  });
   const storage = createBrowserStorage(config.storage);
 
   // Create session manager first (needed for token exchange)
@@ -141,6 +144,8 @@ export function createDirectAuthClient(
     issuer: config.issuer,
     clientId: config.clientId,
     http,
+    tokenStorage:
+      config.storage?.storage === "sessionStorage" ? "sessionStorage" : "memory",
   });
 
   // Token exchange callback
