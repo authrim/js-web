@@ -24,7 +24,9 @@ export { createAuthrim } from "./authrim.js";
 export type {
   // Configuration
   AuthrimConfig,
+  AuthrimFetchOptions,
   DiagnosticLoggingOptions,
+  WebSdkProfile,
 
   // Response types (Discriminated Union)
   AuthResponse,

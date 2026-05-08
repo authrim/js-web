@@ -56,6 +56,12 @@ export interface SessionManagerOptions {
    * browser clients that accept reload persistence.
    */
   tokenStorage?: "memory" | "sessionStorage";
+  /** Optional DPoP proof provider for token endpoint requests. */
+  tokenRequestDPoP?: {
+    required: boolean;
+    generateProof(nonce?: string): Promise<string>;
+    handleNonce?(nonce: string): void;
+  };
 }
 
 /**
@@ -87,8 +93,10 @@ export class SessionAuthImpl implements SessionAuth {
   private readonly http: BrowserHttpClient;
   private readonly storageKey: string;
   private readonly tokenStorage: "memory" | "sessionStorage";
+  private readonly tokenRequestDPoP?: SessionManagerOptions["tokenRequestDPoP"];
   private diagnosticLogger: IDiagnosticLogger | null = null;
   private memoryToken: string | null = null;
+  private memoryRefreshToken: string | null = null;
 
   // Cached session
   private cachedSession: Session | null = null;
@@ -102,6 +110,7 @@ export class SessionAuthImpl implements SessionAuth {
     this.http = options.http;
     this.storageKey = getStorageKey(options.issuer, options.clientId);
     this.tokenStorage = options.tokenStorage ?? "memory";
+    this.tokenRequestDPoP = options.tokenRequestDPoP;
   }
 
   /**
@@ -128,6 +137,10 @@ export class SessionAuthImpl implements SessionAuth {
     }
   }
 
+  private get refreshStorageKey(): string {
+    return `${this.storageKey}:refresh`;
+  }
+
   /**
    * Store access token according to the configured token storage policy.
    */
@@ -139,6 +152,40 @@ export class SessionAuthImpl implements SessionAuth {
       } catch {
         // Keep the in-memory token even when sessionStorage is unavailable.
       }
+    }
+  }
+
+  private getStoredRefreshToken(): string | null {
+    if (this.memoryRefreshToken) {
+      return this.memoryRefreshToken;
+    }
+    if (this.tokenStorage !== "sessionStorage") {
+      return null;
+    }
+    try {
+      return sessionStorage.getItem(this.refreshStorageKey);
+    } catch {
+      return null;
+    }
+  }
+
+  private storeRefreshToken(token: string): void {
+    this.memoryRefreshToken = token;
+    if (this.tokenStorage === "sessionStorage") {
+      try {
+        sessionStorage.setItem(this.refreshStorageKey, token);
+      } catch {
+        // Keep the in-memory refresh token even when sessionStorage is unavailable.
+      }
+    }
+  }
+
+  private storeTokenResponse(tokenResponse: DirectAuthTokenResponsePhase1): void {
+    if (tokenResponse.access_token) {
+      this.storeToken(tokenResponse.access_token);
+    }
+    if (tokenResponse.refresh_token) {
+      this.storeRefreshToken(tokenResponse.refresh_token);
     }
   }
 
@@ -156,9 +203,11 @@ export class SessionAuthImpl implements SessionAuth {
    */
   private removeStoredToken(): void {
     this.memoryToken = null;
+    this.memoryRefreshToken = null;
     if (this.tokenStorage === "sessionStorage") {
       try {
         sessionStorage.removeItem(this.storageKey);
+        sessionStorage.removeItem(this.refreshStorageKey);
       } catch {
         // sessionStorage may be unavailable.
       }
@@ -333,15 +382,39 @@ export class SessionAuthImpl implements SessionAuth {
     }
 
     let response;
+    const tokenEndpoint = `${this.issuer}${ENDPOINTS.TOKEN}`;
+    const createHeaders = async (nonce?: string) => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/x-www-form-urlencoded",
+      };
+      if (this.tokenRequestDPoP?.required) {
+        headers.DPoP = await this.tokenRequestDPoP.generateProof(nonce);
+      }
+      return headers;
+    };
+
     try {
       response = await this.http.fetch<DirectAuthTokenResponsePhase1>(
-        `${this.issuer}${ENDPOINTS.TOKEN}`,
+        tokenEndpoint,
         {
           method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          headers: await createHeaders(),
           body: body.toString(),
         },
       );
+
+      const nonce = getHeaderValue(response.headers, "dpop-nonce");
+      if (!response.ok && nonce && this.tokenRequestDPoP?.required) {
+        this.tokenRequestDPoP.handleNonce?.(nonce);
+        response = await this.http.fetch<DirectAuthTokenResponsePhase1>(
+          tokenEndpoint,
+          {
+            method: "POST",
+            headers: await createHeaders(nonce),
+            body: body.toString(),
+          },
+        );
+      }
     } catch (error) {
       this.diagnosticLogger?.logAuthDecision({
         decision: "deny",
@@ -368,7 +441,19 @@ export class SessionAuthImpl implements SessionAuth {
         const errorData = response.data as unknown as {
           error?: string;
           error_description?: string;
+          error_uri?: string;
         };
+
+        if (isDirectAuthDPoPBindingError(errorData?.error)) {
+          throw new AuthrimError(
+            errorData.error,
+            errorData.error_description || errorData.error,
+            {
+              errorUri: errorData.error_uri,
+              details: { originalError: errorData.error },
+            },
+          );
+        }
 
         if (errorData?.error === "invalid_grant") {
           throw new AuthrimError(
@@ -399,14 +484,127 @@ export class SessionAuthImpl implements SessionAuth {
       flow: "direct",
     });
 
-    // Store access_token in memory for subsequent requests
-    if (tokenResponse.access_token) {
-      this.storeToken(tokenResponse.access_token);
-    }
+    // Store browser token-session material according to the configured storage policy.
+    this.storeTokenResponse(tokenResponse);
 
     return {
       tokens: tokenResponse,
     };
+  }
+
+  /**
+   * Refresh the browser token-session access token.
+   *
+   * Refresh token storage follows the same policy as access tokens: memory-only
+   * by default, sessionStorage only when explicitly configured.
+   */
+  async refreshAccessToken(): Promise<string | null> {
+    const refreshToken = this.getStoredRefreshToken();
+    if (!refreshToken) {
+      return null;
+    }
+
+    const body = new URLSearchParams();
+    body.set("grant_type", "refresh_token");
+    body.set("client_id", this.clientId);
+    body.set("refresh_token", refreshToken);
+
+    const tokenEndpoint = `${this.issuer}${ENDPOINTS.TOKEN}`;
+    const createHeaders = async (nonce?: string) => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/x-www-form-urlencoded",
+      };
+      if (this.tokenRequestDPoP?.required) {
+        headers.DPoP = await this.tokenRequestDPoP.generateProof(nonce);
+      }
+      return headers;
+    };
+
+    let response;
+    try {
+      response = await this.http.fetch<DirectAuthTokenResponsePhase1>(
+        tokenEndpoint,
+        {
+          method: "POST",
+          headers: await createHeaders(),
+          body: body.toString(),
+        },
+      );
+
+      const nonce = getHeaderValue(response.headers, "dpop-nonce");
+      if (!response.ok && nonce && this.tokenRequestDPoP?.required) {
+        this.tokenRequestDPoP.handleNonce?.(nonce);
+        response = await this.http.fetch<DirectAuthTokenResponsePhase1>(
+          tokenEndpoint,
+          {
+            method: "POST",
+            headers: await createHeaders(nonce),
+            body: body.toString(),
+          },
+        );
+      }
+    } catch (error) {
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: "token_refresh_error",
+        flow: "direct",
+        context: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      throw error;
+    }
+
+    if (!response.ok || !response.data?.access_token) {
+      const errorData = response.data as unknown as {
+        error?: string;
+        error_description?: string;
+        error_uri?: string;
+      };
+
+      if (errorData?.error === "refresh_token_reuse_detected") {
+        this.removeStoredToken();
+        throw new AuthrimError(
+          "refresh_token_reuse_detected",
+          errorData.error_description || "Refresh token reuse detected",
+          {
+            errorUri: errorData.error_uri,
+          },
+        );
+      }
+
+      this.diagnosticLogger?.logAuthDecision({
+        decision: "deny",
+        reason: "token_refresh_failed",
+        flow: "direct",
+        context: {
+          status: response.status,
+          error: errorData?.error,
+        },
+      });
+      const refreshErrorCode =
+        errorData?.error === "invalid_grant" ? "invalid_grant" : "refresh_error";
+
+      throw new AuthrimError(
+        refreshErrorCode,
+        errorData?.error_description || "Failed to refresh access token",
+        {
+          errorUri: errorData?.error_uri,
+          details: {
+            originalError: errorData?.error,
+          },
+        },
+      );
+    }
+
+    this.storeTokenResponse(response.data);
+    this.clearCache();
+    this.diagnosticLogger?.logAuthDecision({
+      decision: "allow",
+      reason: "token_refresh_success",
+      flow: "direct",
+    });
+    return response.data.access_token;
   }
 
   /**
@@ -460,4 +658,28 @@ export class SessionAuthImpl implements SessionAuth {
   getStorageKey(): string {
     return this.storageKey;
   }
+}
+
+function getHeaderValue(headers: Record<string, string> | undefined, name: string): string | null {
+  if (!headers) {
+    return null;
+  }
+  const normalizedName = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === normalizedName) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function isDirectAuthDPoPBindingError(error: string | undefined): error is
+  | "dpop_nonce_required"
+  | "dpop_replay_rejected"
+  | "token_binding_failed" {
+  return (
+    error === "dpop_nonce_required" ||
+    error === "dpop_replay_rejected" ||
+    error === "token_binding_failed"
+  );
 }

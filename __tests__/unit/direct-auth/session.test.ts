@@ -588,6 +588,181 @@ describe("SessionAuthImpl", () => {
       );
     });
 
+    it("should not persist or log token_session token material by default", async () => {
+      const logger = {
+        logAuthDecision: vi.fn(),
+        logTokenValidation: vi.fn(),
+        getDiagnosticSessionId: vi.fn(() => "diagnostic-session"),
+        isEnabled: vi.fn(() => true),
+      };
+      session.setDiagnosticLogger(logger);
+      const mockResponse: HttpResponse<{
+        access_token: string;
+        refresh_token: string;
+        id_token: string;
+        token_type: "DPoP";
+        expires_in: number;
+      }> = {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        data: {
+          access_token: "access-token-secret",
+          refresh_token: "refresh-token-secret",
+          id_token: "id-token-secret",
+          token_type: "DPoP",
+          expires_in: 3600,
+        },
+      };
+      vi.mocked(mockHttp.fetch).mockResolvedValue(mockResponse);
+
+      await session.exchangeToken("auth-code-123", "code-verifier-123", true);
+
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
+      expect(JSON.stringify(logger.logAuthDecision.mock.calls)).not.toContain("access-token-secret");
+      expect(JSON.stringify(logger.logAuthDecision.mock.calls)).not.toContain("refresh-token-secret");
+      expect(JSON.stringify(logger.logAuthDecision.mock.calls)).not.toContain("id-token-secret");
+    });
+
+    it("should keep refresh tokens memory-only by default and refresh the access token", async () => {
+      vi.mocked(mockHttp.fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "access-token-1",
+            refresh_token: "refresh-token-1",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "access-token-2",
+            refresh_token: "refresh-token-2",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        });
+
+      await session.exchangeToken("auth-code-123", "code-verifier-123", true);
+      const refreshed = await session.refreshAccessToken();
+
+      expect(refreshed).toBe("access-token-2");
+      expect(session.getToken()).toBe("access-token-2");
+      expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
+      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      expect(mockHttp.fetch).toHaveBeenLastCalledWith(
+        "https://auth.example.com/token",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("grant_type=refresh_token"),
+        }),
+      );
+      expect(String(vi.mocked(mockHttp.fetch).mock.calls[1][1]?.body)).toContain(
+        "refresh_token=refresh-token-1",
+      );
+    });
+
+    it("should retry refresh token DPoP nonce challenges once", async () => {
+      const dpop = {
+        required: true,
+        generateProof: vi
+          .fn()
+          .mockResolvedValueOnce("proof-exchange")
+          .mockResolvedValueOnce("proof-refresh-1")
+          .mockResolvedValueOnce("proof-refresh-2"),
+        handleNonce: vi.fn(),
+      };
+      const dpopSession = new SessionAuthImpl({
+        issuer: "https://auth.example.com",
+        clientId: "test-client-id",
+        http: mockHttp,
+        tokenRequestDPoP: dpop,
+      });
+      vi.mocked(mockHttp.fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "access-token-1",
+            refresh_token: "refresh-token-1",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+          headers: { "dpop-nonce": "refresh-nonce" },
+          data: { error: "use_dpop_nonce" },
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "access-token-2",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        });
+
+      await dpopSession.exchangeToken("auth-code-123", "code-verifier-123", true);
+      const refreshed = await dpopSession.refreshAccessToken();
+
+      expect(refreshed).toBe("access-token-2");
+      expect(dpop.handleNonce).toHaveBeenCalledWith("refresh-nonce");
+      expect(vi.mocked(mockHttp.fetch).mock.calls[2][1]?.headers).toMatchObject({
+        DPoP: "proof-refresh-2",
+      });
+    });
+
+    it("should clear token state on refresh token reuse detection", async () => {
+      vi.mocked(mockHttp.fetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "access-token-1",
+            refresh_token: "refresh-token-1",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: "Bad Request",
+          headers: {},
+          data: {
+            error: "refresh_token_reuse_detected",
+            error_description: "Refresh token reuse detected",
+          },
+        });
+
+      await session.exchangeToken("auth-code-123", "code-verifier-123", true);
+
+      await expect(session.refreshAccessToken()).rejects.toMatchObject({
+        code: "refresh_token_reuse_detected",
+      });
+      expect(session.getToken()).toBeNull();
+    });
+
     it("should include resource when refresh token request is specified", async () => {
       const mockResponse: HttpResponse<{
         access_token: string;
@@ -614,6 +789,83 @@ describe("SessionAuthImpl", () => {
           body: expect.stringContaining("resource=test-client-id"),
         }),
       );
+    });
+
+    it("should attach DPoP proof and retry one token endpoint nonce challenge", async () => {
+      const dpop = {
+        required: true,
+        generateProof: vi
+          .fn()
+          .mockResolvedValueOnce("proof-1")
+          .mockResolvedValueOnce("proof-2"),
+        handleNonce: vi.fn(),
+      };
+      const dpopSession = new SessionAuthImpl({
+        issuer: "https://auth.example.com",
+        clientId: "test-client-id",
+        http: mockHttp,
+        tokenRequestDPoP: dpop,
+      });
+      vi.mocked(mockHttp.fetch)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: "Bad Request",
+          headers: { "dpop-nonce": "nonce-1" },
+          data: { error: "use_dpop_nonce" },
+        } as HttpResponse)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: {},
+          data: {
+            access_token: "new-access-token",
+            token_type: "DPoP",
+            expires_in: 3600,
+          },
+        } as HttpResponse);
+
+      const result = await dpopSession.exchangeToken("auth-code-123", "code-verifier-123");
+
+      expect(result.tokens?.access_token).toBe("new-access-token");
+      expect(dpop.handleNonce).toHaveBeenCalledWith("nonce-1");
+      expect(dpop.generateProof).toHaveBeenNthCalledWith(1, undefined);
+      expect(dpop.generateProof).toHaveBeenNthCalledWith(2, "nonce-1");
+      expect(mockHttp.fetch).toHaveBeenNthCalledWith(
+        1,
+        "https://auth.example.com/token",
+        expect.objectContaining({
+          headers: expect.objectContaining({ DPoP: "proof-1" }),
+        }),
+      );
+      expect(mockHttp.fetch).toHaveBeenNthCalledWith(
+        2,
+        "https://auth.example.com/token",
+        expect.objectContaining({
+          headers: expect.objectContaining({ DPoP: "proof-2" }),
+        }),
+      );
+    });
+
+    it("should throw structured DPoP binding errors from token exchange", async () => {
+      vi.mocked(mockHttp.fetch).mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        headers: {},
+        data: {
+          error: "dpop_replay_rejected",
+          error_description: "DPoP proof replay was rejected",
+        },
+      } as HttpResponse);
+
+      await expect(
+        session.exchangeToken("auth-code-123", "code-verifier-123"),
+      ).rejects.toMatchObject({
+        code: "dpop_replay_rejected",
+        message: "DPoP proof replay was rejected",
+      });
     });
 
     it("should not create a Direct Auth session cache from token response", async () => {

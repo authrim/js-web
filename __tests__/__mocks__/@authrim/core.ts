@@ -46,6 +46,28 @@ export class AuthrimError extends Error {
   }
 }
 
+export class DPoPManager {
+  constructor(..._args: unknown[]) {}
+
+  async initialize(): Promise<void> {}
+
+  async calculateAccessTokenHash(_accessToken: string): Promise<string> {
+    return "mock-access-token-hash";
+  }
+
+  async generateProof(
+    _method: string,
+    _uri: string,
+    options?: { nonce?: string },
+  ): Promise<string> {
+    return options?.nonce
+      ? `mock-dpop-proof:${options.nonce}`
+      : "mock-dpop-proof";
+  }
+
+  handleNonceResponse(_nonce: string): void {}
+}
+
 // Types
 export interface TokenSet {
   accessToken: string;
@@ -99,6 +121,7 @@ export interface BuildAuthorizationUrlOptions {
   scope?: string;
   prompt?: "none" | "login" | "consent" | "select_account";
   loginHint?: string;
+  maxAge?: number;
   acrValues?: string;
   extraParams?: Record<string, string>;
   exposeState?: boolean;
@@ -595,11 +618,27 @@ export async function createAuthrimClient(
   config: AuthrimClientConfig,
 ): Promise<AuthrimClient> {
   return {
-    buildAuthorizationUrl: async (options) => ({
-      url: `${config.issuer}/authorize?client_id=${config.clientId}&redirect_uri=${options.redirectUri}&state=mock-state&nonce=mock-nonce`,
-      state: options.exposeState ? "mock-state" : undefined,
-      nonce: options.exposeState ? "mock-nonce" : undefined,
-    }),
+    buildAuthorizationUrl: async (options) => {
+      const url = new URL(`${config.issuer}/authorize`);
+      url.searchParams.set("client_id", config.clientId);
+      url.searchParams.set("redirect_uri", options.redirectUri);
+      url.searchParams.set("state", "mock-state");
+      url.searchParams.set("nonce", "mock-nonce");
+      if (options.prompt) {
+        url.searchParams.set("prompt", options.prompt);
+      }
+      if (options.maxAge !== undefined) {
+        url.searchParams.set("max_age", String(options.maxAge));
+      }
+      if (options.acrValues) {
+        url.searchParams.set("acr_values", options.acrValues);
+      }
+      return {
+        url: url.toString(),
+        state: options.exposeState ? "mock-state" : undefined,
+        nonce: options.exposeState ? "mock-nonce" : undefined,
+      };
+    },
     handleCallback: async () => ({
       accessToken: "mock-access-token",
       tokenType: "Bearer" as const,

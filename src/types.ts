@@ -35,6 +35,7 @@ import type {
   RenameDeviceResponse,
   UnlinkDeviceOptions,
   UnlinkDeviceResponse,
+  AuthrimWebSdkProfile,
 } from "@authrim/core";
 import type { DirectAuthTokenResponsePhase1 } from "./direct-auth/protocol.js";
 
@@ -48,6 +49,7 @@ import type { DirectAuthTokenResponsePhase1 } from "./direct-auth/protocol.js";
 export type StorageType = "memory" | "sessionStorage" | "localStorage";
 export type BrowserPublicClientMode = "strict" | "cookie_fallback" | "legacy";
 export type BrowserRefreshTokenPolicy = "disabled" | "dpop_bound";
+export type WebSdkProfile = AuthrimWebSdkProfile;
 
 /**
  * Storage options
@@ -159,6 +161,28 @@ export interface AuthrimConfig {
    * authentication decisions. Logs can be exported for OIDF submission.
    */
   diagnosticLogging?: DiagnosticLoggingOptions;
+  /**
+   * Browser SDK session profile.
+   *
+   * - 'token': pure browser token profile with DPoP-bound OAuth/OIDC tokens.
+   * - 'cookie': BFF/token-handler style calls using cookies and no browser token material.
+   * - 'auto': reserved for framework adapters that can resolve the profile safely.
+   *
+   * Default: 'token' for @authrim/web. Framework packages may default to 'auto'.
+   */
+  profile?: WebSdkProfile;
+  /**
+   * Cookie profile CSRF integration.
+   *
+   * The SDK copies the double-submit cookie value into a header for
+   * state-changing requests. Server adapters must issue and verify the token.
+   */
+  csrf?: {
+    /** Default: 'authrim_csrf' */
+    cookieName?: string;
+    /** Default: 'X-Authrim-CSRF' */
+    headerName?: string;
+  };
 }
 
 // =============================================================================
@@ -515,6 +539,8 @@ export interface OAuthBuildAuthorizationUrlOptions {
   nonce?: string;
   prompt?: "none" | "login" | "consent" | "select_account";
   loginHint?: string;
+  maxAge?: number;
+  acrValues?: string;
 }
 
 /**
@@ -696,7 +722,15 @@ export interface AuthrimBase {
   signUp: SignUpShortcuts;
 
   // Utility
+  fetch(
+    input: RequestInfo | URL,
+    init?: AuthrimFetchOptions,
+  ): Promise<Response>;
   signOut(options?: SignOutOptions): Promise<void>;
+  signOutApplicationGroup(
+    options?: Omit<SignOutOptions, "logoutScope">,
+  ): Promise<void>;
+  signOutAll(options?: Omit<SignOutOptions, "logoutScope">): Promise<void>;
   setDiagnosticLogger?(logger: IDiagnosticLogger | null): void;
 
   // Event system
@@ -704,6 +738,15 @@ export interface AuthrimBase {
     event: E,
     handler: AuthEventHandler<E>,
   ): () => void;
+}
+
+export interface AuthrimFetchOptions extends RequestInit {
+  /** Override the configured profile for this request. */
+  profile?: Exclude<WebSdkProfile, "auto">;
+  /** Explicit access token for token profile requests. Defaults to the SDK session token. */
+  accessToken?: string;
+  /** Override cookie profile CSRF token. Set false to suppress automatic CSRF header attachment. */
+  csrfToken?: string | false;
 }
 
 /**
