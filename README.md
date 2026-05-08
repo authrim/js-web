@@ -11,8 +11,9 @@ Browser SDK for [Authrim](https://github.com/sgrastar/authrim) - a modern, devel
 
 - **Unified `{ data, error }` response pattern** - Type-safe error handling with discriminated unions
 - **Direct Auth** - Passkey (WebAuthn), Email Code, Social Login
-- **OAuth/OIDC** - Popup, Silent Auth, Redirect flows
+- **OAuth/OIDC** - Popup, redirect, Authorization Code + PKCE, and top-level `prompt=none` SSO flows
 - **Session Management** - check_session_iframe, Session Monitor, Front-Channel Logout
+- **Session Profiles** - `token` profile with DPoP-bound browser tokens, or `cookie` profile for BFF/token-handler integrations
 - **Device Flow UI** - Helper for CLI/TV/IoT authentication
 
 This package uses `@authrim/core` internally and provides browser-specific implementations.
@@ -85,6 +86,7 @@ import { createAuthrim } from '@authrim/web';
 const auth = await createAuthrim({
   issuer: 'https://auth.example.com',
   clientId: 'your-client-id',
+  profile: 'token',
 });
 
 // Passkey login
@@ -131,7 +133,7 @@ if (data) {
 | | Social Login | Popup and redirect flows |
 | **OAuth/OIDC** | | |
 | | Authorization Code + PKCE | Standard secure flow |
-| | Silent Auth | Hidden iframe session renewal |
+| | Silent Auth | Top-level `prompt=none` SSO with optional iframe compatibility support |
 | | Popup Auth | Popup window flow |
 | | Redirect Auth | Full page redirect flow |
 | **Session Management** | | |
@@ -217,6 +219,12 @@ interface AuthrimConfig {
   clientId: string;
   /** Enable OAuth/OIDC features (default: false) */
   enableOAuth?: boolean;
+  /** Browser session profile. Use 'token' for API-oriented browser apps and 'cookie' for BFF/token-handler integrations. */
+  profile?: 'auto' | 'cookie' | 'token';
+  /** Browser public token mode. Custom browser token clients default to strict DPoP. */
+  browserPublicClientMode?: 'strict' | 'cookie_fallback' | 'legacy';
+  /** Browser refresh token policy. Defaults to disabled; dpop_bound requires explicit opt-in. */
+  browserRefreshTokenPolicy?: 'disabled' | 'dpop_bound';
   /** Storage configuration */
   storage?: {
     type?: 'localStorage' | 'sessionStorage' | 'memory';
@@ -362,10 +370,10 @@ const { url, state, nonce } = await auth.oauth.buildAuthorizationUrl({
 // Handle callback
 const { data, error } = await auth.oauth.handleCallback(window.location.href);
 
-// Silent auth (iframe)
-const { data, error } = await auth.oauth.silentAuth.check({
-  redirectUri: 'https://app.example.com/silent-callback',
-  timeoutMs: 5000,
+// Silent SSO uses top-level prompt=none navigation by default.
+await auth.oauth.trySilentLogin({
+  returnTo: window.location.href,
+  onLoginRequired: 'return',
 });
 
 // Popup login
