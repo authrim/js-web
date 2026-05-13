@@ -34,6 +34,8 @@ export { SessionAuthImpl, type SessionManagerOptions } from "./session.js";
  * Browser-specific Direct Auth client configuration
  */
 export interface BrowserDirectAuthConfig extends DirectAuthClientConfig {
+  /** Tenant id used to scope browser DPoP key material when known. */
+  tenantId?: string;
   /**
    * Storage options
    *
@@ -136,6 +138,7 @@ export function createDirectAuthClient(
   const crypto = new BrowserCryptoProvider({
     issuer: config.issuer,
     clientId: config.clientId,
+    tenantId: config.tenantId,
   });
   const storage = createBrowserStorage(config.storage);
 

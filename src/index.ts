@@ -136,6 +136,16 @@ export {
   authResultToResponse,
 } from "./response.js";
 
+export {
+  TenantDiscoveryClient,
+  buildDiscoveryRequest,
+  type DiscoveredTenant,
+  type TenantDiscoveryClientOptions,
+  type TenantDiscoveryInput,
+  type TenantDiscoveryMode,
+  type TenantDiscoveryResult,
+} from "./tenant-discovery.js";
+
 // =============================================================================
 // Session Management
 // =============================================================================

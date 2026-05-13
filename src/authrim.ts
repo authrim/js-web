@@ -162,6 +162,7 @@ export async function createAuthrim<T extends AuthrimConfig>(
   const crypto = new BrowserCryptoProvider({
     issuer: config.issuer,
     clientId: config.clientId,
+    tenantId: config.tenantId,
   });
   const webSdkProfile = resolveWebSdkProfile(config);
   const dpopManager = new DPoPManager(crypto, { algorithm: "ES256" });
@@ -831,6 +832,7 @@ async function createOAuthNamespace(
   const crypto = new BrowserCryptoProvider({
     issuer: config.issuer,
     clientId: config.clientId,
+    tenantId: config.tenantId,
   });
   const storageOptions: BrowserStorageOptions = config.storage ?? {};
   const storage = createBrowserStorage(storageOptions);

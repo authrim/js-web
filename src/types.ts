@@ -119,6 +119,8 @@ export interface AuthrimConfig {
   issuer: string;
   /** OAuth client ID */
   clientId: string;
+  /** Tenant id used to scope browser DPoP key material when known. */
+  tenantId?: string;
   /**
    * Enable OAuth/OIDC features (popup, silent auth, etc.)
    * When true, auth.oauth namespace becomes available
