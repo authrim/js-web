@@ -215,7 +215,7 @@ describe('BrowserCryptoProvider', () => {
       expect(signature.length).toBe(64);
 
       const reloadedProvider = new BrowserCryptoProvider({
-        issuer: 'https://auth.example.com',
+        issuer: 'https://auth.example.com/oauth',
         clientId: 'client-a',
         crypto: webcrypto as unknown as Crypto,
         indexedDB,
