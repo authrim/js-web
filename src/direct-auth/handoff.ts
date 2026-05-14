@@ -111,7 +111,7 @@ export class HandoffAuthImpl {
     // TODO: Add diagnostic logging when IDiagnosticLogger supports generic log method
     // this.diagnosticLogger?.log("info", "Handoff token verification started", {...});
 
-    const verifyUrl = new URL(`${this.issuer}/auth/external/handoff/verify`);
+    const verifyUrl = new URL(`${this.issuer}/handoff/verify`);
     if (options.include === "session,user") {
       verifyUrl.searchParams.set("include", "session,user");
     }

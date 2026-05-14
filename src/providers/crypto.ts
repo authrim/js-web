@@ -19,6 +19,7 @@ const DPOP_DB_VERSION = 1;
 export interface BrowserCryptoProviderOptions {
   issuer?: string;
   clientId?: string;
+  tenantId?: string;
   crypto?: Crypto | null;
   indexedDB?: IDBFactory | null;
   dpopDatabaseName?: string;
@@ -55,6 +56,7 @@ interface StoredDPoPKeyPair {
 export class BrowserCryptoProvider implements CryptoProvider {
   private readonly issuer?: string;
   private readonly clientId?: string;
+  private readonly tenantId?: string;
   private readonly cryptoImpl?: Crypto;
   private readonly indexedDBImpl?: IDBFactory;
   private readonly dpopDatabaseName: string;
@@ -62,6 +64,7 @@ export class BrowserCryptoProvider implements CryptoProvider {
   constructor(options: BrowserCryptoProviderOptions = {}) {
     this.issuer = options.issuer;
     this.clientId = options.clientId;
+    this.tenantId = options.tenantId;
     this.cryptoImpl =
       "crypto" in options ? (options.crypto ?? undefined) : globalThis.crypto;
     this.indexedDBImpl =
@@ -263,9 +266,12 @@ export class BrowserCryptoProvider implements CryptoProvider {
   }
 
   private getDPoPStoreKey(): string {
-    const issuer = this.issuer ? new URL(this.issuer).origin : "default-issuer";
+    const issuer = this.issuer ? this.issuer.replace(/\/+$/, "") : "default-issuer";
     const clientId = this.clientId ?? "default-client";
-    return `${issuer}|${clientId}`;
+    const tenantId = this.tenantId ?? "default-tenant";
+    // Scope by the full issuer, client_id, and tenant id. The full issuer avoids
+    // sharing a browser DPoP key between path-based tenants on the same origin.
+    return `${issuer}|${clientId}|${tenantId}`;
   }
 
   private openDPoPDatabase(): Promise<IDBDatabase> {

@@ -24,7 +24,9 @@ export { createAuthrim } from "./authrim.js";
 export type {
   // Configuration
   AuthrimConfig,
+  AuthrimFetchOptions,
   DiagnosticLoggingOptions,
+  WebSdkProfile,
 
   // Response types (Discriminated Union)
   AuthResponse,
@@ -133,6 +135,16 @@ export {
   failureFromParams,
   authResultToResponse,
 } from "./response.js";
+
+export {
+  TenantDiscoveryClient,
+  buildDiscoveryRequest,
+  type DiscoveredTenant,
+  type TenantDiscoveryClientOptions,
+  type TenantDiscoveryInput,
+  type TenantDiscoveryMode,
+  type TenantDiscoveryResult,
+} from "./tenant-discovery.js";
 
 // =============================================================================
 // Session Management
